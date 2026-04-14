@@ -1,3 +1,10 @@
+---
+name: status
+description: |
+  Mostra o estado atual de todas as tasks do projeto: em qual fase cada uma está, branch atual e pendências. Use quando o usuário mencionar: "status", "dashboard", "status das tasks", "como estão as tasks", ou qualquer variação de consulta de progresso.
+tools: Read, Glob, Grep, Bash
+---
+
 # Status — Sub-skill de Dashboard
 
 > Mostra o estado atual de todas as tasks do projeto: em qual fase cada uma está, branch atual e pendências.

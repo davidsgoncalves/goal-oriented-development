@@ -1,3 +1,10 @@
+---
+name: implement
+description: |
+  Executa o plano de implementação da task, criando subagents para tasks complexas ou executando diretamente para tasks simples. Suporta flag --code-like-me para implementação cirúrgica. Use quando o usuário mencionar: "implementar task", "implement", "executar plano", ou quando a fase de implementação for ativada pelo GDD.
+tools: Read, Glob, Grep, Bash, Edit, Write, Agent
+---
+
 # Implement — Sub-skill de Implementação
 
 > Executa o plano de implementação da task, criando subagents para tasks complexas ou executando diretamente para tasks simples. Suporta flag `--code-like-me` para implementação cirúrgica.

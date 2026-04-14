@@ -1,3 +1,10 @@
+---
+name: install
+description: |
+  Configura a arquitetura de pastas e arquivos GDD no projeto do usuário e verifica integrações MCP opcionais. Use quando o usuário mencionar: "instalar gdd", "install", "configurar gdd", "setup gdd", ou na primeira execução do framework.
+tools: Read, Glob, Grep, Bash, Edit, Write
+---
+
 # Install — Sub-skill de Instalação
 
 > Configura a arquitetura de pastas e arquivos GDD no projeto do usuário e verifica integrações MCP opcionais.

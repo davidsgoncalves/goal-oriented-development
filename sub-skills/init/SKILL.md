@@ -1,3 +1,10 @@
+---
+name: init
+description: |
+  Recebe uma task (via Jira ou manual), coleta contexto, consulta histórico e cria a estrutura da task no projeto. Use quando o usuário mencionar: "nova task", "iniciar task", "init", "criar task", ou quando a fase de inicialização for ativada pelo GDD.
+tools: Read, Glob, Grep, Bash, Edit, Write, Agent
+---
+
 # Init — Sub-skill de Inicialização de Task
 
 > Recebe uma task (via Jira ou manual), coleta contexto, consulta histórico e cria a estrutura da task no projeto.

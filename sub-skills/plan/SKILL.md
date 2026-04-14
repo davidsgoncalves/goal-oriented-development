@@ -1,3 +1,10 @@
+---
+name: plan
+description: |
+  Analisa a task, coleta contexto do projeto e do código, tira dúvidas com o usuário e escreve o plano de implementação. Use quando o usuário mencionar: "planejar task", "criar plano", "plan", ou quando a fase de planejamento for ativada pelo GDD.
+tools: Read, Glob, Grep, Bash, Edit, Write, Agent
+---
+
 # Plan — Sub-skill de Planejamento
 
 > Analisa a task, coleta contexto do projeto e do código, tira dúvidas com o usuário e escreve o plano de implementação.

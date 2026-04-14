@@ -1,3 +1,10 @@
+---
+name: review
+description: |
+  Revisa a qualidade do trabalho em dois modos: comparando descrição com plano, ou comparando plano com execução. Retorna relatórios para a skill chamadora avaliar e corrigir. Use quando o usuário mencionar: "revisar", "review", "checar qualidade", ou quando ativada automaticamente pelo GDD.
+tools: Read, Glob, Grep, Bash, Edit, Write, Agent
+---
+
 # Review — Sub-skill de Revisão
 
 > Revisa a qualidade do trabalho em dois modos: comparando descrição com plano, ou comparando plano com execução. Retorna relatórios para a skill chamadora avaliar e corrigir.

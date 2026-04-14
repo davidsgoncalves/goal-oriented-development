@@ -1,3 +1,10 @@
+---
+name: pack-up
+description: |
+  Executa todo o fluxo de finalização da task: commit, testes, linter, push, criação de PR e ações finais — tudo conforme definido no pack-up-instructions.md. Use quando o usuário mencionar: "pack up", "finalizar task", "fechar task", "empacotar", ou quando a fase de finalização for ativada pelo GDD.
+tools: Read, Glob, Grep, Bash, Edit, Write, Agent
+---
+
 # Pack-up — Sub-skill de Finalização
 
 > Executa todo o fluxo de finalização da task: commit, testes, linter, push, criação de PR e ações finais — tudo conforme definido no `pack-up-instructions.md`.

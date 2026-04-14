@@ -1,3 +1,10 @@
+---
+name: gdd
+description: |
+  GDD (Goal Driven Development) — Meta framework que orquestra o ciclo de vida completo de uma task: install, init, plan, implement, pack-up, learn. Inclui review automática, status dashboard, update-plan, learn (knowledge) e integração com Jira/Figma. Use quando o usuário mencionar: "gdd", "nova task", "iniciar task", "planejar task", "implementar task", "pack up", "learn", "conhecimento", "status das tasks", "help", ou qualquer variação do ciclo de desenvolvimento orientado a objetivos.
+tools: Read, Glob, Grep, Bash, Edit, Write, Agent
+---
+
 # GDD — Skill Orquestradora
 
 > Skill principal do framework GDD. Orquestra o ciclo de vida completo de uma task: da inicialização até a entrega. Tem awareness de todas as sub-skills e roteia o usuário para a skill correta.

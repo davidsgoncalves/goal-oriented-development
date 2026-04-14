@@ -1,3 +1,10 @@
+---
+name: learn
+description: |
+  Transforma uma task executada em conhecimento reutilizável. Analisa a descrição, o plano, os commits e o que realmente aconteceu para extrair aprendizados e registrar no knowledge. Use quando o usuário mencionar: "learn", "aprender", "extrair conhecimento", "registrar aprendizado", ou quando a fase de aprendizado for ativada pelo GDD.
+tools: Read, Glob, Grep, Bash, Edit, Write
+---
+
 # Learn — Sub-skill de Transformação em Conhecimento
 
 > Transforma uma task executada em conhecimento reutilizável. Analisa a descrição, o plano, os commits e o que realmente aconteceu para extrair aprendizados e registrar no knowledge.

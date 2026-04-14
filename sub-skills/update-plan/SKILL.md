@@ -1,3 +1,10 @@
+---
+name: update-plan
+description: |
+  Permite alterar o plano de implementação durante ou antes da implementação, quando surgem mudanças de escopo, descobertas técnicas ou decisões do usuário. Use quando o usuário mencionar: "atualizar plano", "update plan", "mudar plano", "ajustar plano", ou quando a implementação revelar necessidade de mudança.
+tools: Read, Glob, Grep, Bash, Edit, Write, Agent
+---
+
 # Update Plan — Sub-skill de Atualização de Plano
 
 > Permite alterar o plano de implementação durante ou antes da implementação, quando surgem mudanças de escopo, descobertas técnicas ou decisões do usuário.
