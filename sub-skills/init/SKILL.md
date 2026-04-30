@@ -77,11 +77,14 @@ parent: null
 
 ---
 
-> Esta descrição está bruta. A skill `plan` irá enriquecê-la com:
+> Esta descrição está bruta. A skill `spec` irá consumi-la para produzir a spec canônica:
 > - dados do Jira (se houver código/link)
 > - links do Figma encontrados no Jira
-> - referências a tasks semelhantes do `knowledge.md`
-> - perguntas e respostas esclarecendo escopo e edge cases
+> - Q&A com o usuário focada em escopo
+> - cenários, edge cases e NFRs
+>
+> A spec resultante vive em `<specs_path>/tasks/{cod-da-task}.md` (configurado em `GOD/config.md`),
+> não dentro desta pasta.
 ```
 
 **Sobre o frontmatter:**
@@ -97,6 +100,8 @@ parent: null
 phase: initialized
 updated_at: {timestamp-iso-8601-utc}
 updated_by: init
+spec_path: null
+spec_version_consumed: null
 branch: null
 branch_base: null
 learned: false
@@ -107,6 +112,8 @@ prs: []
 - `phase`: sempre `initialized` neste passo
 - `updated_at`: timestamp ISO 8601 em UTC (ex: `2026-04-15T14:30:00Z`)
 - `updated_by`: sempre `init` neste passo
+- `spec_path`: sempre `null`. A skill `spec` resolve e popula com o caminho da spec gerada.
+- `spec_version_consumed`: sempre `null`. Atualizado pelo `plan` e `implement` com a `spec_version` (frontmatter da spec) que foi lida na última execução. Permite freshness check — se a spec mudou desde a última leitura, o framework alerta.
 - `branch`: sempre `null`. A skill `plan` resolve o nome da branch da task; a skill `implement` cria de fato no git.
 - `branch_base`: sempre `null`. A skill `plan` resolve o branch base (dependente de patterns + multi-project).
 - `learned`: sempre `false`. Será flipado para `true` pela skill `learn` quando o usuário escolher transformar a task em conhecimento.
@@ -123,11 +130,11 @@ Ler `GOD/hooks.md` e localizar a seção `# after init`.
 
 > ✅ Task `{cod-da-task}` inicializada!
 >
-> 📄 `GOD/tasks/{cod-da-task}/description.md` — input bruto salvo (aguardando enriquecimento pelo `plan`)
-> 📋 `GOD/tasks/{cod-da-task}/plan.md` — aguardando planejamento
-> 📍 `GOD/tasks/{cod-da-task}/status.md` — fase: `initialized`, branch: `null` (será resolvida pelo `plan` e criada pelo `implement`)
+> 📄 `GOD/tasks/{cod-da-task}/description.md` — input bruto salvo (aguardando consumo pela `spec`)
+> 📋 `GOD/tasks/{cod-da-task}/plan.md` — aguardando planejamento (após a spec)
+> 📍 `GOD/tasks/{cod-da-task}/status.md` — fase: `initialized`, spec_path: `null`, branch: `null`
 >
-> 💡 Próximo passo: rode `plan` — ela vai buscar dados no Jira, consultar knowledge, resolver a branch da task (nome + base) e escrever o plano de implementação.
+> 💡 Próximo passo: rode `spec` — ela vai buscar dados no Jira, fazer Q&A focada em escopo e produzir a spec canônica em `<specs_path>/tasks/{cod-da-task}.md`.
 >
 > [Se hooks before/after foram executados, listar resumidamente o que rodou]
 

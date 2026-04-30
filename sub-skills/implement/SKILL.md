@@ -30,12 +30,32 @@ Ler `GOD/hooks.md` e localizar a seção `# before implement`.
 - Se o contexto da conversa já contém o código da task, usar esse código
 - Caso contrário, perguntar ao usuário o código da task (ex: `PROJ-123`)
 
-### 2. Ler o plano
+### 2. Ler spec e plano, checar freshness
 
-Ler o arquivo `GOD/tasks/{cod-da-task}/plan.md` para obter o plano de implementação.
+A spec é o **contrato de escopo**; o plano é o **mapa técnico**. Ambos são consumidos:
 
-- Se o plano estiver vazio, informar o usuário que precisa rodar a skill `plan` antes
-- Se o plano existir, analisar sua estrutura e complexidade
+1. **Ler `GOD/tasks/{cod-da-task}/status.md`** e extrair `spec_path` e `spec_version_consumed`.
+   - Se `spec_path` ausente: a task não passou pela `spec`. Orientar a rodar `spec` antes.
+2. **Ler a spec** em `<spec_path>` (relativo ao diretório do GOD ou absoluto).
+   - Se o arquivo não existe: avisar e pedir confirmação do path atual ou re-rodar `spec`.
+   - Extrair REQs, ACs (com IDs estáveis), cenários e NFRs — vão ser referenciados durante a implementação.
+   - Extrair `spec_version` do frontmatter da spec.
+3. **Freshness check (a partir da v7):**
+   - Se `spec_version_consumed` é `null` → primeira execução do `implement` (provavelmente plan rodou em versão pré-v7), prosseguir.
+   - Se `spec_version_consumed` < `spec_version` da spec atual → **a spec mudou desde o último `plan` ou `implement`**. Alertar:
+
+     > ⚠️ A spec mudou desde a última execução de plan/implement nesta task.
+     > - Versão consumida: v{spec_version_consumed}
+     > - Versão atual da spec: v{spec_version}
+     >
+     > O plano em `plan.md` pode estar desatualizado. Sugerido: rodar `update-plan` antes de implementar. Quer (a) rodar `update-plan` agora, (b) prosseguir mesmo assim, (c) abortar?
+
+   - Se igual → spec não mudou, prosseguir normalmente.
+4. **Ler `GOD/tasks/{cod-da-task}/plan.md`** para obter o plano técnico.
+   - Se o plano estiver vazio, informar o usuário que precisa rodar a skill `plan` antes.
+   - Se o plano existir, analisar sua estrutura e complexidade.
+
+Durante a implementação, a spec é consultada repetidamente (cada AC é a "definição de pronto" do passo correspondente do plano). O plano é o roteiro; a spec é o critério.
 
 ### 2.05. Preparar git (validar estado + criar/ativar branch(es) da task)
 
@@ -190,6 +210,50 @@ Se durante a execução você identificar:
 2. Se o usuário confirmar ou estiver ausente, delegar à skill `pause` passando o motivo da barreira como observação.
 3. A skill `pause` escreve o bloco `⏸ PAUSE` no changelog e marca `paused: true`. A implementação pára aqui.
 
+### 5.5. Anotação AC↔teste (a partir da v8)
+
+Após escrever testes, **anotar quais ACs cada teste cobre** via comentário leve. Isso alimenta a skill `coverage` (v8).
+
+Pra cada arquivo de teste criado ou modificado nesta task:
+
+1. Identificar quais ACs da spec cada `describe`/`it`/`test` cobre. Cruzar com a spec lida no passo 2.
+2. Adicionar comentário **acima** do bloco de teste no formato:
+
+   ```ts
+   // covers: AC-001.1, AC-001.2
+   it('rejects empty phone', () => { ... });
+   ```
+
+   Ou, pra Ruby:
+   ```ruby
+   # covers: AC-001.1
+   it 'rejects empty phone' do ... end
+   ```
+
+   Ou Python:
+   ```python
+   # covers: AC-001.1
+   def test_rejects_empty_phone(): ...
+   ```
+
+3. Se um teste cobre **múltiplos ACs**, listar separados por vírgula: `// covers: AC-001.1, AC-001.2`.
+4. Se um teste **não corresponde diretamente a nenhum AC** (ex: teste de helper interno), **não anotar nada** — ausência de comentário significa "não rastreado pra spec".
+5. **Não inventar ACs.** Se você sente que falta um AC pra cobrir o teste que está escrevendo, é sinal de que a spec está incompleta — anote no changelog e sugira `update-spec` (v9, futuro) ao usuário antes de prosseguir.
+
+**Pra ACs sem teste automatizado** (típico de FE sem cultura E2E, validações visuais, auditoria pós-deploy):
+
+1. Editar (ou criar) `GOD/tasks/{cod}/coverage.md`.
+2. Na seção `## Validações manuais`, adicionar entrada:
+
+   ```markdown
+   - AC-002.1: validação manual em staging por PM (data: pendente)
+   - AC-002.2: visual em staging por UX
+   ```
+
+3. Ser **honesto** — se vai ser validado manualmente, registra explícito. Não fingir que tá testado.
+
+Após anotar, a próxima execução de `coverage`, `pack-up` ou `review --execution` vai reconhecer essas amarras.
+
 ### 6. Verificação pós-implementação
 
 Após implementar:
@@ -242,6 +306,7 @@ Após concluir a verificação pós-implementação, atualizar `GOD/tasks/{cod-d
 - `phase`: `implemented`
 - `updated_at`: timestamp ISO 8601 em UTC
 - `updated_by`: `implement`
+- `spec_version_consumed`: **`spec_version` da spec lida no passo 2** (int) — atualiza pra refletir o que foi efetivamente implementado contra
 - `branch`, `branch_base`, `learned`, `prs`: preservar valores atuais
 
 ### 8. Executar hook `after implement`

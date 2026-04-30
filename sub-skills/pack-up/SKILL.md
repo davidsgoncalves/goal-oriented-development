@@ -53,11 +53,22 @@ Se não houver alterações, informar o usuário e encerrar.
 
 ### 4. Revisão plano vs execução
 
-Antes de commitar, chamar a sub-skill `review --execution` passando o código da task.
+Antes de commitar, chamar a sub-skill `review --execution` passando o código da task. A partir da v8, esse review já inclui o eixo de cobertura de ACs.
 
 - Se o relatório retornar **Aprovado**: prosseguir com o commit
 - Se o relatório retornar **Ajustes necessários**: apresentar o relatório ao usuário e perguntar se deseja corrigir antes de continuar ou prosseguir mesmo assim
 - Se o relatório retornar **Reprovado**: apresentar o relatório ao usuário e pausar o pack-up até que as correções sejam feitas
+
+### 4.5. Gerar matriz de cobertura (a partir da v8)
+
+Chamar a sub-skill `coverage --task {cod} --format markdown` pra gerar a tabela AC × validação que vai entrar no PR description.
+
+- Capturar a saída em markdown — será usada no passo 7 (criar PR).
+- Se a saída indicar **ACs órfãos**, exibir aviso ao usuário no terminal:
+
+  > ⚠️ {N} ACs estão sem cobertura registrada (nem teste, nem validação manual). Eles aparecerão como ⚠️ na tabela do PR. Quer (a) voltar pro implement pra anotar, (b) editar `coverage.md` agora, (c) prosseguir mesmo assim?
+
+- Tasks **sem spec** (raras na v8 — só tasks pré-v6 que sobreviveram): `coverage` retorna "não aplicável", e este passo vira no-op (nenhuma tabela injetada).
 
 ### 5. Commit
 
@@ -79,6 +90,34 @@ Criar o Pull Request seguindo o **padrão de mensagem de PR** definido no `patte
 - Se o padrão não estiver definido, usar:
   - **Título:** `{cod-da-task}: {título da task}`
   - **Corpo:** descrição da task + resumo das alterações
+- **Anexar referência à spec** (a partir da v6): se `spec_path` estiver presente em `status.md`, adicionar ao final do corpo do PR um bloco:
+
+  ```markdown
+  ---
+
+  📐 **Spec:** `{spec_path}` (v{spec_version})
+
+  REQs cobertos: {lista lida do plan.md ou da spec}
+  ```
+
+  Esse bloco existe pra que quem revisa o PR saiba qual contrato a implementação cumpre — sem precisar abrir 3 arquivos. Se a spec usa path relativo, manter como está (mesmo path que o GOD usa). Em multi-project, o bloco de referência é repetido em cada PR (a spec é a mesma; o que muda é o repo).
+
+- **Anexar matriz de cobertura** (a partir da v8): logo após o bloco da spec, injetar a saída markdown da `coverage` capturada no passo 4.5:
+
+  ```markdown
+  📊 **Cobertura de ACs**
+
+  | AC | Status | Validação |
+  |----|--------|-----------|
+  | AC-001.1 | ✅ | tests/phone-validator.test.ts:42 |
+  | AC-001.2 | ✅ | tests/phone-validator.test.ts:55 |
+  | AC-001.3 | 👁 | manual: validação visual em staging por PM |
+  | AC-002.1 | ⚠️ | (sem cobertura) |
+
+  **Resumo:** 4 ACs · 2 testes · 1 manual · 1 órfão
+  ```
+
+  Tasks sem spec não geram este bloco.
 - Capturar a URL do PR retornada por `gh pr create` — será salva no `status.md` no próximo passo
 
 ### 8. Atualizar status para `packed-up`

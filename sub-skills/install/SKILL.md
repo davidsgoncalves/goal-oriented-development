@@ -30,7 +30,7 @@ Quando o usuário invocar esta skill, execute os seguintes passos **na ordem**:
 
 Antes de qualquer coisa, verificar o estado das pastas no diretório raiz.
 
-- **Se `GOD/` existe e tem `GOD/VERSION` com conteúdo `v5`:** informar que o projeto já está instalado na versão atual e encerrar.
+- **Se `GOD/` existe e tem `GOD/VERSION` com conteúdo `v8`:** informar que o projeto já está instalado na versão atual e encerrar.
 - **Se `GOD/` existe mas `GOD/VERSION` não existe (ou aponta pra versão anterior):** informar que é uma instalação de versão antiga e sugerir rodar a skill `upgrade` em vez de reinstalar. Não sobrescrever arquivos existentes.
 - **Se `GOD/` não existe mas `GDD/` existe:** instalação legada da skill GDD detectada. Informar o usuário e sugerir rodar `upgrade` (ou `migrate`) para migrar automaticamente de GDD para GOD. Não instalar do zero — os dados do usuário (tasks, knowledge, patterns, hooks) serão preservados pela migração. Encerrar sem criar nada.
 - **Se nem `GOD/` nem `GDD/` existem:** prosseguir com a instalação.
@@ -42,6 +42,7 @@ No diretório raiz do projeto do usuário, crie a seguinte estrutura:
 ```
 GOD/
 ├── VERSION
+├── config.md
 ├── knowledge.md
 ├── patterns.md
 ├── learned-patterns.md
@@ -49,20 +50,135 @@ GOD/
 └── tasks/
 ```
 
-- `VERSION` — arquivo com conteúdo `v5` (uma linha, sem espaços)
-
+- `VERSION` — arquivo com conteúdo `v8` (uma linha, sem espaços)
+- `config.md` — configuração local do GOD nesse projeto (ver passo 1.5 abaixo). Contém `specs_path` (onde a spec da task vai morar)
 - `knowledge.md` — criado com template padrão (ver seção abaixo)
 - `patterns.md` — criado com template padrão (ver seção abaixo)
 - `learned-patterns.md` — criado com template padrão (ver seção abaixo)
 - `hooks.md` — criado com template padrão (ver seção abaixo)
 - `tasks/` — pasta vazia para armazenar tasks do projeto
 
+### 1.5. Configurar `specs_path` e criar `GOD/config.md`
+
+A partir da v6, a spec de cada task vive **fora** da pasta `GOD/`. Motivo: a spec é ativo canônico do produto — committada e lida por todos —, enquanto a pasta `GOD/` é workflow individual e pode ser ignorada do git.
+
+**Conceito-chave:** o `specs_path` é o **root do repo de specs**, não a pasta direto onde as tasks são escritas. O GOD escreve em `<specs_path>/tasks/<cod>.md`. Subpastas como `domains/` e `flows/` são reservadas pra skills futuras (feature specs eternas, fluxos cross-feature) — não criadas agora.
+
+#### 1.5.1. Detectar contexto e apresentar opções
+
+Antes de perguntar, **detectar o contexto** rodando `git rev-parse --show-toplevel` no diretório atual:
+
+- **Sucesso (está dentro de repo git)** → contexto **single-project**: dentro de um repositório.
+- **Falha** → contexto **workspace multi-project**: pasta-mãe contendo múltiplos repos.
+
+Apresentar opções calibradas pelo contexto:
+
+**Se single-project:**
+
+```
+📐 Onde guardar as specs das tasks?
+
+A spec é artefato canônico do produto — committável separadamente, lida por todos.
+
+Opções:
+  1. docs/specs/                                  (default — dentro deste repo)
+  2. ../<workspace>/<nome-do-repo-de-specs>/      (repo dedicado ao lado deste, no workspace pai)
+  3. <path-absoluto>                              (qualquer outro lugar — você digita)
+  4. <outro-relativo>                             (qualquer outro path relativo a aqui)
+
+Escolha (1/2/3/4) ou tecle Enter pra default:
+```
+
+**Se multi-project workspace:**
+
+```
+📐 Onde guardar as specs das tasks?
+
+Detectei que você está num workspace multi-project (pasta sem .git contendo repos).
+Recomendado: repo dedicado de specs ao lado dos repos de código.
+
+Opções:
+  1. ./<nome-do-repo-de-specs>/    (repo dedicado neste workspace — recomendado)
+  2. <path-absoluto>               (qualquer outro lugar — você digita)
+  3. <outro-relativo>              (qualquer outro path relativo a aqui)
+
+Escolha (1/2/3) ou tecle Enter pra opção 1:
+```
+
+#### 1.5.2. Resolver e criar a estrutura
+
+Com o `specs_path` decidido, executar:
+
+1. **Se a pasta não existe**: criar com `mkdir -p <specs_path>`.
+2. **Se a pasta existe e não é repo git**: perguntar `"Inicializar como repo git separado? (s/n)"`. Se sim, rodar `git init` lá. Se não, prosseguir como pasta normal.
+3. **Se a pasta existe e já é repo git**: usar como está. Não tocar.
+4. **Criar subpasta `tasks/`** dentro do `specs_path` (`mkdir -p <specs_path>/tasks/`).
+5. **Criar README mínimo** em `<specs_path>/README.md` se não existir (ver template abaixo). Se já existir, não tocar.
+6. **Não criar `domains/` nem `flows/` agora** — reservados pra skills futuras escreverem sob demanda.
+
+Template do `<specs_path>/README.md`:
+
+```markdown
+# Specs
+
+Repositório canônico de specs do produto. Cada spec é o **contrato de escopo** de uma feature/task — REQs em formato EARS, ACs com IDs estáveis, cenários e NFRs explícitos.
+
+## Estrutura
+
+```
+specs/
+├── tasks/                # Spec autocontida por task (uma por entrega)
+│   └── <cod>.md          # ex: PROJ-123.md
+├── domains/              # (reservado) Feature specs eternas por domínio do produto
+└── flows/                # (reservado) Índices que amarram múltiplas features (jornadas e2e)
+```
+
+`tasks/` é populado pelo framework GOD (skill `spec`) na fase de SDD por task.
+`domains/` e `flows/` serão populados por skills futuras quando feature specs eternas e fluxos cross-feature forem suportados.
+
+## Convenções
+
+- Toda spec começa com frontmatter: `spec_version`, `task`, `created_at`, `updated_at`.
+- ACs têm IDs estáveis: `AC-NNN.N` (ex: `AC-001.2`). Não renomear depois de citar em código/teste.
+- Specs não falam de implementação — proibido mencionar framework, biblioteca, banco. Isso é HOW, vai pro plan da task.
+- Specs são commitadas como artefato de produto. Histórico via `git log`.
+```
+
+#### 1.5.3. Criar `GOD/config.md`
+
+Conteúdo:
+
+```markdown
+# Config — Configuração local do GOD
+
+> Configuração específica desta instalação do GOD no projeto. Diferente do `patterns.md`,
+> que descreve convenções **do projeto** (lidas por todos), este arquivo descreve onde o
+> GOD escreve/lê **artefatos** dentro do filesystem. Pode variar entre desenvolvedores se
+> a pasta `GOD/` estiver no `.gitignore`.
+
+## specs_path
+
+Root do repo de specs. O GOD escreve em `<specs_path>/tasks/<cod>.md`. Subpastas
+`domains/` e `flows/` são reservadas pra skills futuras.
+
+Aceita relativo (resolve a partir do diretório onde o GOD foi instalado) ou absoluto.
+
+{specs_path}
+
+> Cenários:
+> - Local no repo: `docs/specs/`
+> - Workspace multi-project: `./vakinha-specs/` ou `../vakinha-specs/`
+> - Repo separado em qualquer lugar: `/Users/eu/projetos/vakinha-workspace/vakinha-specs/`
+```
+
+Substituir `{specs_path}` pelo valor decidido. Se o usuário inicializou como repo git separado nesse passo, anotar isso no relatório final.
+
 ### 2. Preencher template do `VERSION`
 
 Conteúdo exato:
 
 ```
-v5
+v8
 ```
 
 ### 3. Preencher template do `knowledge.md`
@@ -167,13 +283,19 @@ O arquivo `GOD/hooks.md` deve ser criado com o seguinte template:
 > Cada seção abaixo é um hook opcional. Se você quiser que algo seja executado antes ou depois de um step do fluxo, escreva aqui em linguagem natural — a skill correspondente vai ler e executar.
 > Se não quer nada nesse hook, deixe o valor `skip-hook`.
 >
-> Apenas os steps do fluxo principal têm hooks: `init`, `plan`, `implement`, `pack-up`.
-> Ferramentas auxiliares (`learn`, `update-plan`, `review`, `status`) não têm hooks.
+> Apenas os steps do fluxo principal têm hooks: `init`, `spec`, `plan`, `implement`, `pack-up`.
+> Ferramentas auxiliares (`learn`, `update-plan`, `review`, `status`, `publish-spec`) não têm hooks.
 
 # before init
 skip-hook
 
 # after init
+skip-hook
+
+# before spec
+skip-hook
+
+# after spec
 skip-hook
 
 # before plan
@@ -194,6 +316,12 @@ skip-hook
 # after pack-up
 skip-hook
 ```
+
+**Exemplos comuns de uso pro `after spec`** (preencha quando quiser ativar):
+
+- Postar comentário no ticket Jira da task com link da spec, contagem de REQs/ACs e aviso "se algum critério não bate, comente aqui antes do dev começar"
+- Postar mensagem em canal Slack `#produto` com resumo da spec
+- Linkar URL da spec no card Linear/Trello correspondente
 
 Após criar, informe ao usuário que ele deve preencher o `patterns.md` com as convenções do projeto e, opcionalmente, preencher os hooks no `hooks.md`.
 
@@ -221,7 +349,13 @@ Nenhuma dessas integrações é obrigatória, mas sem `gh` a experiência do `pa
 Montar a resposta listando o que está ok e o que está faltando:
 
 ```
-✅ Instalação v5 concluída! Estrutura GOD criada.
+✅ Instalação v8 concluída! Estrutura GOD criada.
+
+📐 Repo de specs configurado: {specs_path}
+   • Pasta {criada / já existia}
+   • Estrutura {tasks/ criada}
+   • README {criado / já existia}
+   • git: {repo separado inicializado / repo já existente / pasta dentro do projeto / pasta sem git}
 
 🔌 Integrações:
   [✓/✗] Figma MCP — {status}
@@ -237,7 +371,7 @@ Montar a resposta listando o que está ok e o que está faltando:
   1. Preencha `GOD/patterns.md` com as convenções do seu projeto
   2. (Opcional) Preencha slots de `GOD/hooks.md` que você quer customizar
   3. `GOD/learned-patterns.md` começa vazio — a skill `learn` vai preenchê-lo após a revisão de PR
-  4. Rode `init` para iniciar sua primeira task
+  4. Rode `init` para iniciar sua primeira task. Fluxo: init → spec → plan → implement → pack-up
 ```
 
 ---
