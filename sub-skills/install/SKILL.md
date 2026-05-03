@@ -168,10 +168,25 @@ Aceita relativo (resolve a partir do diretório onde o GOD foi instalado) ou abs
 > Cenários:
 > - Local no repo: `docs/specs/`
 > - Workspace multi-project: `./vakinha-specs/` ou `../vakinha-specs/`
-> - Repo separado em qualquer lugar: `/Users/eu/projetos/vakinha-workspace/vakinha-specs/`
+> - Repo separado em qualquer lugar: `/Users/eu/projetos/<workspace>/<repo-de-specs>/`
+
+## publish_spec_default_target
+
+Default usado pela sub-skill `publish-spec` quando `--target` não é passado.
+Aceita um único target ou múltiplos separados por vírgula.
+
+Valores conhecidos: `jira`, `slack`, `stdout`, `notion`. Targets customizados
+exigem definição em `GOD/hooks.md` como `# publish-spec target: <nome>`.
+
+(deixe vazio pra usar `stdout` como default original)
+
+> Exemplos:
+> - `jira` — toda execução de `publish-spec` sem flag publica no Jira
+> - `jira, slack` — publica nos dois ao mesmo tempo
+> - (vazio) — comportamento original: `stdout`
 ```
 
-Substituir `{specs_path}` pelo valor decidido. Se o usuário inicializou como repo git separado nesse passo, anotar isso no relatório final.
+Substituir `{specs_path}` pelo valor decidido. A seção `publish_spec_default_target` fica vazia por padrão (retrocompat). Se o usuário inicializou como repo git separado nesse passo, anotar isso no relatório final.
 
 ### 2. Preencher template do `VERSION`
 

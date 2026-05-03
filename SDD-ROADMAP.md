@@ -386,6 +386,7 @@ Capacidades aplicadas a múltiplas skills sem precisar de versão própria. Apar
 | Patch | O que faz | Aplicado em |
 |-------|-----------|-------------|
 | **v8.1 — peer-review via subagent** | `review --spec/--plan/--execution` delegam pra subagent isolado (`Explore` ou `general-purpose`). Elimina viés de auto-validação | `sub-skills/review/SKILL.md` |
+| **v8.2 — default target do publish-spec configurável** | `publish-spec` aceita default em `GOD/config.md` seção `## publish_spec_default_target` (single ou comma-separated). Sem default → `stdout` (retrocompat). Tasks novas instaladas via v8.2 já trazem a seção vazia no template | `sub-skills/publish-spec/SKILL.md`, `sub-skills/install/SKILL.md` |
 
 ---
 

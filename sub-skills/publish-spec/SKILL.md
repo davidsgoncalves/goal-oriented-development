@@ -18,8 +18,39 @@ tools: Read, Glob, Grep, Bash, Edit, Write
 
 ## Flags
 
-- `--target <destino>` — destino da publicação. Valores: `jira`, `slack`, `stdout`, `notion`, ou qualquer string que o hook reconheça. Pode ser repetida (ex: `--target jira --target slack`). **Default:** `stdout` se nenhum target for passado.
+- `--target <destino>` — destino da publicação. Valores: `jira`, `slack`, `stdout`, `notion`, ou qualquer string que o hook reconheça. Pode ser repetida (ex: `--target jira --target slack`). **Default:** lê de `GOD/config.md` seção `## publish_spec_default_target`; se ausente ou vazia, usa `stdout`.
 - `--dry-run` — gera o conteúdo formatado e mostra ao usuário, sem disparar nenhuma publicação. Útil pra revisar antes.
+
+## Default configurável no GOD/config.md
+
+Pra evitar passar `--target` em toda execução (ex: você sempre publica no Jira), defina o default em `GOD/config.md`:
+
+```markdown
+## publish_spec_default_target
+
+jira
+```
+
+A skill lê esse valor quando `--target` não é passado. Aceita um único target ou múltiplos separados por vírgula:
+
+```markdown
+## publish_spec_default_target
+
+jira, slack
+```
+
+Equivale a chamar `publish-spec --target jira --target slack`.
+
+### Ordem de precedência
+
+1. Flag `--target` na invocação (override pontual; pode ser repetida)
+2. `GOD/config.md` → `## publish_spec_default_target`
+3. Sem default → `stdout` (comportamento original)
+
+### Quando o default é ignorado
+
+- Target resolvido (default ou flag) é **inválido** — avisar o usuário e cair pra `stdout`.
+- Target requer integração indisponível (ex: `jira` mas MCP Atlassian fora) — avisar e cair pra `stdout` apenas pra esse target específico (outros targets resolvidos seguem normalmente).
 
 ## Instruções
 
@@ -34,6 +65,24 @@ Ler `GOD/tasks/{cod-da-task}/status.md` e extrair `spec_path`.
 
 - Se `spec_path` é `null` ou ausente: a task não tem spec. Orientar a rodar `spec` primeiro e encerrar.
 - Se o arquivo no `spec_path` não existe: avisar e pedir confirmação.
+
+### 1.5. Resolver target(s)
+
+Determinar a lista de targets a usar nesta execução, na seguinte ordem:
+
+1. **Se `--target` foi passado** (uma ou mais vezes): usar esses valores. Pular config.
+2. **Senão**, ler `GOD/config.md` e procurar seção `## publish_spec_default_target`:
+   - Se a seção existe e tem valor não-vazio: parsear (split por vírgula, trim espaços) e usar.
+   - Se a seção existe mas está vazia, ou não existe: cair pro próximo passo.
+3. **Senão**, usar `stdout` (default original retrocompatível).
+
+Validar cada target resolvido:
+
+- Targets conhecidos (`jira`, `slack`, `stdout`, `notion`): aceitar direto.
+- Targets desconhecidos: procurar em `GOD/hooks.md` por seção `# publish-spec target: <nome>`. Se existe, aceitar. Se não, avisar o usuário ("target `<nome>` desconhecido — defina em `hooks.md` ou use um conhecido") e remover da lista.
+- Se sobrar a lista vazia após validação, cair pra `stdout` e avisar.
+
+Reportar a fonte do target ao usuário na primeira saída do comando: `Target(s): [jira, slack] (via GOD/config.md)` ou `Target: stdout (default)`.
 
 ### 2. Ler a spec
 
