@@ -1,13 +1,13 @@
 ---
 name: init
 description: |
-  Cria a estrutura de uma nova task no projeto: pasta em `GOD/tasks/` e os arquivos `description.md` (com o input bruto do usuário), `plan.md` (vazio) e `status.md` (fase `initialized`). Não toca no git, não busca dados no Jira, não consulta knowledge, não faz Q&A — isso é responsabilidade das skills `plan` e `implement`. Use quando o usuário mencionar: "nova task", "iniciar task", "init", "criar task", ou quando a fase de inicialização for ativada pelo GOD.
+  Cria a estrutura de execução de uma task **depois** que a spec já existe (v9 spec-first). Lê a spec canônica em `<specs_path>/tasks/{cod}.md`, cria a pasta `GOD/tasks/{cod}/` com `plan.md` vazio e `status.md` apontando pra spec (phase `specified`). Não toca no git, não busca dados em sistemas externos. Aceita `--type=trivial` que dispensa spec pra mudanças cosméticas. Use quando o usuário mencionar: "iniciar task", "init", "criar estrutura da task", ou quando a fase de inicialização for ativada pelo GOD após a spec.
 tools: Read, Glob, Grep, Bash, Edit, Write
 ---
 
-# Init — Sub-skill de Inicialização de Task
+# Init — Sub-skill de Inicialização de Task (pós-spec na v9)
 
-> Cria a estrutura base de uma nova task em `GOD/tasks/`. Salva o input do usuário sem enriquecer. O trabalho de enriquecimento (Jira, Figma, knowledge, Q&A, resolução de branch) acontece na skill `plan`. A criação da branch no git acontece na skill `implement`.
+> Cria a estrutura de execução de uma task em `GOD/tasks/{cod}/` apontando pra spec já produzida em `<specs_path>/tasks/{cod}.md`. Roda **depois** de `spec` no fluxo v9 (spec-first). Aceita `--type=trivial` que pula spec inteira pra mudanças cosméticas. Não cria branch no git — isso continua sendo responsabilidade do `implement`.
 
 ## Banner
 
@@ -22,12 +22,27 @@ Ao iniciar esta skill, **antes de qualquer outra ação**, exiba exatamente este
   Goal Oriented Development
 ```
 
+## Posição no fluxo (v9)
+
+```
+spec → [publish-spec] → init → plan → implement → pack-up
+                       ^^^^
+                       você está aqui
+```
+
+> **Mudança v9 (spec-first):** init agora roda **depois** de `spec`. A spec da task já existe em `<specs_path>/tasks/{cod}.md` quando esta skill é invocada (exceto em `--type=trivial`). Init não captura mais input bruto — isso virou responsabilidade do `spec`.
+
+## Flags
+
+- `--type=trivial` — atalho pra mudanças cosméticas (copy, typo, dep upgrade) que não justificam spec. Cria estrutura mínima sem exigir spec prévia. **Spec não é gerada nesse modo.** Plano e implementação seguem fluxo normal a partir da estrutura criada.
+- `--type=normal|critical` — apenas registra o perfil em `status.md`. Spec deve ter sido produzida pela skill `spec` antes desta invocação. Útil pra coerência de status (ex: dashboards filtrarem por perfil).
+
 ## Invocação programática
 
 Esta skill pode ser invocada:
 
-- **Interativamente pelo usuário** (fluxo padrão) — quando o usuário digita "nova task", "init", passa um código ou link do Jira, etc.
-- **Programaticamente pela skill `init-tree`** — a skill `init-tree` chama `init` para cada folha da árvore Jira que ela está processando. Nesse caso, o código da task e a descrição já vêm no contexto da chamada, dispensando qualquer Q&A interativo.
+- **Interativamente pelo usuário** (fluxo padrão) — após o `spec` rodar.
+- **Programaticamente pela skill `init-tree`** — para cada folha da árvore Jira que ela está processando, depois que `init-tree` produziu specs em batch.
 
 ## Instruções
 
@@ -40,64 +55,74 @@ Ler `GOD/hooks.md` e localizar a seção `# before init`.
 - Se o conteúdo for `skip-hook`: pular e seguir para o passo 1.
 - Se houver instruções em linguagem natural: executá-las integralmente antes de prosseguir. Se as instruções falharem ou pedirem confirmação, pausar e consultar o usuário.
 
-### 1. Receber input da task
+### 1. Identificar a task e perfil
 
-O usuário deve fornecer **uma** das seguintes opções (ou a skill chamadora já fornece no contexto):
+Receber **uma** das opções:
 
-- **Link do Jira** — ex: `https://empresa.atlassian.net/browse/PROJ-123` → extrair o código (`PROJ-123`) da URL
-- **Código da task** — ex: `PROJ-123` → usar direto
-- **Nome/descrição manual** — texto livre. Neste caso, pedir ao usuário um código ou nome curto para identificar a task (ex: `minha-task`)
+- **Código da task** — ex: `PROJ-123` (caso normal — spec já existe).
+- **Link do Jira** — extrair código da URL.
+- **Texto livre** (apenas em `--type=trivial`) — pedir um identificador curto (ex: `fix-button-copy`).
 
-**Não buscar dados no Jira nesta skill.** Apenas capturar o input bruto. A skill `plan` fará o fetch do Jira quando for elaborar o plano.
+Determinar o perfil:
 
-### 2. Criar estrutura da task
+- Se a flag `--type=` foi passada: usar direto.
+- Se não foi passada e a spec existe em `<specs_path>/tasks/{cod}.md`: ler o frontmatter `profile` da spec — esse é o perfil oficial da task.
+- Se não foi passada e a spec não existe: orientar o usuário:
+
+  > ⚠️ Não encontrei spec em `<specs_path>/tasks/{cod}.md`.
+  >
+  > - Se essa task é uma feature/bug com escopo: rode `spec {cod}` antes de `init`.
+  > - Se é uma mudança trivial (copy, typo, dep upgrade): rode `init {cod} --type=trivial`.
+
+  Encerrar.
+
+### 2. Resolver `specs_path` (apenas se não-trivial)
+
+Se o perfil é `normal` ou `critical`, ler `GOD/config.md` e extrair `specs_path`. Se ausente, usar default `docs/specs/`.
+
+Resolver path absoluto. Verificar que `<specs_path>/tasks/{cod}.md` existe — se não existir, abortar com a mesma mensagem do passo 1.
+
+Em modo `--type=trivial`, pular este passo (sem spec envolvida).
+
+### 3. Criar estrutura da task
 
 Criar a seguinte estrutura em `GOD/tasks/`:
 
 ```
 GOD/tasks/{cod-da-task}/
-├── description.md
 ├── plan.md
 └── status.md
 ```
 
-**`description.md`** — preencher com frontmatter mínimo + input bruto do usuário:
-
-```markdown
----
-kind: task
-parent: null
----
-
-# {cod-da-task}
-
-## Input do usuário
-
-{input bruto conforme fornecido — link do Jira, código puro, ou texto manual}
-
----
-
-> Esta descrição está bruta. A skill `spec` irá consumi-la para produzir a spec canônica:
-> - dados do Jira (se houver código/link)
-> - links do Figma encontrados no Jira
-> - Q&A com o usuário focada em escopo
-> - cenários, edge cases e NFRs
->
-> A spec resultante vive em `<specs_path>/tasks/{cod-da-task}.md` (configurado em `GOD/config.md`),
-> não dentro desta pasta.
-```
-
-**Sobre o frontmatter:**
-- `kind: task` — sinaliza que a pasta representa uma task real (com plan + implement). Contrasta com `kind: context` usado pelo `init-tree` em nós pai/intermediários.
-- `parent: null` — task solta, sem pai. Quando chamado por `init-tree`, o valor pode ser o código do nó imediatamente acima na árvore do Jira (ex: `parent: PROJ-101`).
+> **Mudança v9:** `description.md` **não é mais criado**. O input bruto vive na seção `## Input bruto` da própria spec (modo trivial não tem input bruto registrado em arquivo — o usuário sabe o que está fazendo).
 
 **`plan.md`** — criar vazio, será preenchido pela skill `plan`.
 
-**`status.md`** — criar com YAML frontmatter registrando o estado inicial:
+**`status.md`** — criar com YAML frontmatter:
+
+**Para perfil `normal` ou `critical` (spec existe):**
 
 ```yaml
 ---
-phase: initialized
+phase: specified
+profile: {normal|critical}
+updated_at: {timestamp-iso-8601-utc}
+updated_by: init
+spec_path: {caminho relativo ou absoluto da spec}
+spec_version_consumed: {spec_version lida do frontmatter da spec atual}
+branch: null
+branch_base: null
+learned: false
+prs: []
+---
+```
+
+**Para perfil `trivial` (sem spec):**
+
+```yaml
+---
+phase: planned
+profile: trivial
 updated_at: {timestamp-iso-8601-utc}
 updated_by: init
 spec_path: null
@@ -109,34 +134,48 @@ prs: []
 ---
 ```
 
-- `phase`: sempre `initialized` neste passo
-- `updated_at`: timestamp ISO 8601 em UTC (ex: `2026-04-15T14:30:00Z`)
-- `updated_by`: sempre `init` neste passo
-- `spec_path`: sempre `null`. A skill `spec` resolve e popula com o caminho da spec gerada.
-- `spec_version_consumed`: sempre `null`. Atualizado pelo `plan` e `implement` com a `spec_version` (frontmatter da spec) que foi lida na última execução. Permite freshness check — se a spec mudou desde a última leitura, o framework alerta.
-- `branch`: sempre `null`. A skill `plan` resolve o nome da branch da task; a skill `implement` cria de fato no git.
-- `branch_base`: sempre `null`. A skill `plan` resolve o branch base (dependente de patterns + multi-project).
-- `learned`: sempre `false`. Será flipado para `true` pela skill `learn` quando o usuário escolher transformar a task em conhecimento.
-- `prs`: sempre `[]`. Será populado pela skill `pack-up` a cada PR criado.
+**Notas dos campos:**
+- `phase`:
+  - `specified` quando spec existe (init consumiu uma spec já produzida — próximo passo é `plan`).
+  - `planned` em modo trivial pra pular conceitualmente o estágio de planejamento (próximo passo é `implement` direto, sem `plan` formal).
+- `profile`: registrado pra dashboards e roteamento (ex: `pack-up` em task crítica pode exigir aprovação extra).
+- `spec_path`: caminho da spec resolvido. Em modo trivial, `null`.
+- `spec_version_consumed`: a versão lida agora. Se a spec for atualizada via `update-spec` depois, `implement` detecta drift comparando.
+- `branch`, `branch_base`: `null` — `plan` resolve, `implement` cria fisicamente. Em modo trivial, `plan` será pulado mas o `implement` ainda resolve a branch sozinho (ver guard-rail).
 
-### 3. Executar hook `after init`
+### 3.5. Criar pasta de retrocompat opcional
+
+Se a task é legacy v8 (já tinha `description.md` na pasta antes de v9), preservar — não tocar no arquivo. Apenas adicionar `plan.md` (se ausente) e `status.md` (se ausente).
+
+Se for task nova v9, **não criar `description.md`**.
+
+### 4. Executar hook `after init`
 
 Ler `GOD/hooks.md` e localizar a seção `# after init`.
 
-- Se o conteúdo for `skip-hook`: pular e seguir para o passo 4.
+- Se o conteúdo for `skip-hook`: pular e seguir para o passo 5.
 - Se houver instruções em linguagem natural: executá-las integralmente antes do relatório final.
 
-### 4. Reportar resultado
+### 5. Reportar resultado
 
-> ✅ Task `{cod-da-task}` inicializada!
+**Para perfil `normal` ou `critical`:**
+
+> ✅ Task `{cod-da-task}` inicializada (perfil: {perfil})!
 >
-> 📄 `GOD/tasks/{cod-da-task}/description.md` — input bruto salvo (aguardando consumo pela `spec`)
-> 📋 `GOD/tasks/{cod-da-task}/plan.md` — aguardando planejamento (após a spec)
-> 📍 `GOD/tasks/{cod-da-task}/status.md` — fase: `initialized`, spec_path: `null`, branch: `null`
+> 📐 Spec referenciada: `{spec_path}` (spec_version: {N})
+> 📋 `GOD/tasks/{cod-da-task}/plan.md` — aguardando planejamento
+> 📍 `GOD/tasks/{cod-da-task}/status.md` — fase: `specified`, branch: `null`
 >
-> 💡 Próximo passo: rode `spec` — ela vai buscar dados no Jira, fazer Q&A focada em escopo e produzir a spec canônica em `<specs_path>/tasks/{cod-da-task}.md`.
+> 💡 Próximo passo: rode `plan {cod}` — vai ler a spec e produzir o plano técnico (arquitetura, arquivos, passos referenciando ACs).
+
+**Para perfil `trivial`:**
+
+> ✅ Task `{cod-da-task}` inicializada (perfil: trivial)!
 >
-> [Se hooks before/after foram executados, listar resumidamente o que rodou]
+> 📋 `GOD/tasks/{cod-da-task}/plan.md` — vazio (modo trivial)
+> 📍 `GOD/tasks/{cod-da-task}/status.md` — fase: `planned`, branch: `null`
+>
+> 💡 Próximo passo: rode `implement {cod}` direto — sem spec/plan, mude o que precisar e siga pro `pack-up`.
 
 Se a skill foi invocada pelo `init-tree`, o relatório final é consolidado pela skill chamadora; aqui basta retornar controle silenciosamente após a criação bem-sucedida.
 
@@ -144,8 +183,10 @@ Se a skill foi invocada pelo `init-tree`, o relatório final é consolidado pela
 
 ## Guard-rails
 
-- **Esta skill não toca no git.** Não faz checkout, não cria branch, não valida estado. A resolução do nome da branch é responsabilidade do `plan`; a criação física é do `implement`.
+- **Esta skill não toca no git.** Não faz checkout, não cria branch, não valida estado. A resolução do nome da branch é responsabilidade do `plan`; a criação física é do `implement`. Em modo `--type=trivial`, o próprio `implement` resolve a branch (porque `plan` é pulado).
 - **Esta skill não escreve em `GOD/knowledge.md`.** Apenas a skill `learn` pode fazê-lo.
-- **Esta skill não busca dados em sistemas externos** (Jira, Figma). O fetch e a consulta ao knowledge são responsabilidade da skill `plan`.
-- **Esta skill não faz Q&A com o usuário sobre a task.** O esclarecimento de escopo acontece na skill `plan`, quando há mais contexto coletado.
-- **Esta skill não lê `GOD/patterns.md`.** A resolução de branch (single-project) e a organização de branches (multi-project) migraram para o `plan` (resolução) e `implement` (criação física).
+- **Esta skill não busca dados em sistemas externos** (Jira, Figma). Esse fetch é do `spec`.
+- **Esta skill não faz Q&A com o usuário sobre escopo.** Q&A acontece no `spec`.
+- **Esta skill não escreve nem modifica a spec.** Apenas referencia (`spec_path`).
+- **Esta skill não cria `description.md` em tasks novas.** Em tasks legacy v8 que já tinham, preserva.
+- **Modo `--type=trivial` é exceção consciente.** Pula spec pra mudanças cosméticas. Não use pra fugir de spec em mudança real — `pack-up` em task de domínio sem spec vai gerar PR sem rastreabilidade, e isso é dívida que volta no code review.

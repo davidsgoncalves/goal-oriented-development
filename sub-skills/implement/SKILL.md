@@ -40,15 +40,50 @@ A spec é o **contrato de escopo**; o plano é o **mapa técnico**. Ambos são c
    - Se o arquivo não existe: avisar e pedir confirmação do path atual ou re-rodar `spec`.
    - Extrair REQs, ACs (com IDs estáveis), cenários e NFRs — vão ser referenciados durante a implementação.
    - Extrair `spec_version` do frontmatter da spec.
-3. **Freshness check (a partir da v7):**
-   - Se `spec_version_consumed` é `null` → primeira execução do `implement` (provavelmente plan rodou em versão pré-v7), prosseguir.
-   - Se `spec_version_consumed` < `spec_version` da spec atual → **a spec mudou desde o último `plan` ou `implement`**. Alertar:
+3. **Freshness check (a partir da v7, estendido na v9):**
+   - Se `spec_version_consumed` é `null` → primeira execução do `implement`, prosseguir.
+   - Se `spec_version_consumed` < `spec_version` da spec atual → **a spec mudou desde o último `plan` ou `implement`**. Aplicar **freshness check estendido (v9)**:
 
-     > ⚠️ A spec mudou desde a última execução de plan/implement nesta task.
+     **3.1. Carregar deltas do changelog.**
+     Ler `<specs_path>/tasks/{cod}-changelog.md` (se existir — só existe se `update-spec` rodou). Extrair entradas das versões `(spec_version_consumed + 1)` até `spec_version` atual. Para cada uma, capturar:
+     - REQs/ACs alterados, adicionados, removidos (da seção "Deltas")
+     - "Impacto na execução" (lista de IDs apontada explicitamente pela skill `update-spec`)
+
+     Se o changelog não existir, a mudança veio de edição direta da spec (ou pré-v9). Nesse caso, fazer diff bruto entre versões só é possível se o usuário registrou no git — alertar como degradado:
+
+     > ℹ️ Spec foi alterada sem passar por `update-spec` — não há changelog estruturado. Vou tratar todos os ACs como potencialmente afetados.
+
+     **3.2. Cruzar com cobertura existente.**
+     Ler `GOD/tasks/{cod}/coverage.md` (v8) se existir. Para cada AC afetado, identificar:
+     - Testes que o cobrem (linhas anotadas via `// covers: AC-X`)
+     - Validações manuais registradas
+     - Se nenhuma cobertura registrada: AC ainda não foi implementado/validado nesta versão — sem ação especial, só listar.
+
+     **3.3. Apresentar diagnóstico ao usuário.**
+
+     > ⚠️ A spec mudou desde a última execução desta task.
      > - Versão consumida: v{spec_version_consumed}
      > - Versão atual da spec: v{spec_version}
      >
-     > O plano em `plan.md` pode estar desatualizado. Sugerido: rodar `update-plan` antes de implementar. Quer (a) rodar `update-plan` agora, (b) prosseguir mesmo assim, (c) abortar?
+     > **Mudanças:**
+     > {por entrada do changelog: motivo + resumo + IDs afetados}
+     >
+     > **Impacto cruzado com `coverage.md`:**
+     > - AC-001.2 (alterado) → testes afetados: `tests/notify.spec.ts:42`, `tests/notify.spec.ts:51`
+     > - AC-002.1 (removido) → teste órfão: `tests/legacy.spec.ts:18` (decisão: manter? remover?)
+     > - REQ-004 (adicionado) → sem cobertura ainda — **passo novo no plano necessário**
+     >
+     > Como prosseguir?
+     > - (a) Rodar `update-plan` agora pra incorporar mudanças no plano (recomendado se há REQs novos)
+     > - (b) Reabrir passos do plano relacionados aos IDs afetados (mostro a lista, você navega item por item)
+     > - (c) Prosseguir mesmo assim (assume que o código já está alinhado com a spec nova)
+     > - (d) Abortar
+
+     **3.4. Aplicar a escolha.**
+     - **(a)** delegar a `update-plan`, depois retornar pro freshness check (loop).
+     - **(b)** percorrer a lista — pra cada AC afetado, mostrar arquivos/testes vinculados, perguntar "manter? alterar? remover?"; aplicar mudanças específicas; quando terminar, prosseguir com implement.
+     - **(c)** prosseguir, mas **registrar em `changelog.md` da task** (não confundir com changelog da spec) que a versão N foi consumida sem revisão de impacto — fica visível pro pack-up/learn depois.
+     - **(d)** abortar sem mexer em nada.
 
    - Se igual → spec não mudou, prosseguir normalmente.
 4. **Ler `GOD/tasks/{cod-da-task}/plan.md`** para obter o plano técnico.

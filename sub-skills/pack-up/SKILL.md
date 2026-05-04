@@ -90,17 +90,23 @@ Criar o Pull Request seguindo o **padrão de mensagem de PR** definido no `patte
 - Se o padrão não estiver definido, usar:
   - **Título:** `{cod-da-task}: {título da task}`
   - **Corpo:** descrição da task + resumo das alterações
-- **Anexar referência à spec** (a partir da v6): se `spec_path` estiver presente em `status.md`, adicionar ao final do corpo do PR um bloco:
+- **Anexar referência à spec** (a partir da v6, ampliado na v9): se `spec_path` estiver presente em `status.md`, adicionar ao final do corpo do PR um bloco:
 
   ```markdown
   ---
 
-  📐 **Spec:** `{spec_path}` (v{spec_version})
+  📐 **Spec:** `{spec_path}` (entregue em v{spec_version_delivered})
 
   REQs cobertos: {lista lida do plan.md ou da spec}
+
+  {se houve mudança de spec durante a task, ou seja, existe `<specs_path>/tasks/{cod}-changelog.md`:}
+  📜 **Mudanças de escopo durante a task:** `{specs_path}/tasks/{cod}-changelog.md`
   ```
 
-  Esse bloco existe pra que quem revisa o PR saiba qual contrato a implementação cumpre — sem precisar abrir 3 arquivos. Se a spec usa path relativo, manter como está (mesmo path que o GOD usa). Em multi-project, o bloco de referência é repetido em cada PR (a spec é a mesma; o que muda é o repo).
+  - `spec_version_delivered` é a `spec_version` atual da spec lida agora pelo pack-up. Carimbar isso no PR cria registro do que foi efetivamente entregue — útil quando aparecer bug em produção e a spec já estiver em outra versão.
+  - O link do changelog só é injetado se o arquivo existir (significa que `update-spec` foi usado). Em tasks sem mudança de escopo durante o trabalho, omitir.
+
+  Esse bloco existe pra que quem revisa o PR saiba qual contrato a implementação cumpre — sem precisar abrir 3 arquivos. Se a spec usa path relativo, manter como está. Em multi-project, o bloco de referência é repetido em cada PR (a spec é a mesma; o que muda é o repo).
 
 - **Anexar matriz de cobertura** (a partir da v8): logo após o bloco da spec, injetar a saída markdown da `coverage` capturada no passo 4.5:
 
@@ -130,6 +136,7 @@ Atualizar `GOD/tasks/{cod-da-task}/status.md`:
 - `branch`, `branch_base`: manter os valores atuais
 - `learned`: **preservar** o valor atual (não alterar — `learn` é quem controla esse campo)
 - `prs`: **fazer append** da URL do PR criado neste pack-up ao array existente. Não sobrescrever — se a task já tinha PRs de pack-ups anteriores (raro, mas possível em tasks com múltiplos repositórios), manter os anteriores
+- `spec_version_delivered` (v9): `spec_version` atual da spec lida no momento do pack-up (int). Sinaliza qual versão da spec foi efetivamente entregue ao revisor. Tasks sem spec (perfil `trivial`) ou pré-v6 → omitir o campo.
 
 Exemplo antes:
 ```yaml
@@ -138,13 +145,13 @@ prs: []
 Após o primeiro pack-up:
 ```yaml
 prs:
-  - https://github.com/org/vakinha-api/pull/123
+  - https://github.com/org/myorg-api/pull/123
 ```
 Após um segundo pack-up no mesmo cod-da-task (outro projeto no mesmo monorepo):
 ```yaml
 prs:
-  - https://github.com/org/vakinha-api/pull/123
-  - https://github.com/org/vakinha-web/pull/456
+  - https://github.com/org/myorg-api/pull/123
+  - https://github.com/org/myorg-web/pull/456
 ```
 
 ### 9. Executar hook `after pack-up`

@@ -1,7 +1,7 @@
 ---
 name: god
 description: |
-  GOD (Goal Oriented Development) — Meta framework que orquestra o ciclo de vida completo de uma task: install, init, spec, plan, implement, pack-up. Inclui variantes (init-tree para lote via árvore Jira) e ferramentas auxiliares (review, status, update-plan, pause, resume, learn, code-like-me, upgrade) e integração com Jira/Figma. Use quando o usuário mencionar: "god", "nova task", "iniciar task", "init em lote", "iniciar epic", "iniciar várias tasks", "subtasks do jira", "spec da task", "criar spec", "planejar task", "implementar task", "pack up", "pause", "resume", "pausar", "retomar", "learn", "conhecimento", "status das tasks", "upgrade god", "help", ou qualquer variação do ciclo de desenvolvimento orientado a objetivos.
+  GOD (Goal Oriented Development) — Meta framework que orquestra o ciclo de vida completo de uma task. Na v9 (spec-first): spec → [publish-spec] → init → plan → implement → pack-up. Inclui variantes (init-tree para lote via árvore Jira) e ferramentas auxiliares (review, status, update-plan, update-spec, pause, resume, learn, code-like-me, upgrade) e integração com Jira/Figma. Use quando o usuário mencionar: "god", "nova task", "iniciar task", "init em lote", "iniciar epic", "iniciar várias tasks", "subtasks do jira", "spec da task", "criar spec", "atualizar spec", "spec mudou", "planejar task", "implementar task", "pack up", "pause", "resume", "pausar", "retomar", "learn", "conhecimento", "status das tasks", "upgrade god", "help", ou qualquer variação do ciclo de desenvolvimento orientado a objetivos.
 tools: Read, Glob, Grep, Bash, Edit, Write, Agent
 ---
 
@@ -9,30 +9,34 @@ tools: Read, Glob, Grep, Bash, Edit, Write, Agent
 
 > Skill principal do framework GOD. Orquestra o ciclo de vida de uma task: da inicialização até a entrega. Tem awareness de todas as sub-skills e roteia o usuário para a skill correta.
 
-## Ciclo de vida de uma task
+## Ciclo de vida de uma task (v9 — spec-first)
 
 ```
-install → init → spec → plan → implement → pack-up
-                  ↑       ↑        ↑           ↑
-               review  review   review      review
-               (spec)  (plan)  (update)  (execution)
+install → spec → [publish-spec] → init → plan → implement → pack-up
+           ↑                              ↑        ↑           ↑
+        review                         review   review      review
+        (spec)                         (plan)  (update)  (execution)
 ```
+
+> **Mudança v9:** spec passa a rodar **antes** do init. Isso torna a spec o gate de entrada (precede commit/branch) e permite validação externa antes de qualquer trabalho de execução. Tasks triviais (typo, copy, dep upgrade) usam `init {cod} --type=trivial` direto, sem spec.
 
 1. **install** — Configura o projeto (executar apenas uma vez). Pergunta `specs_path` (onde a spec da task vai morar) e cria `GOD/config.md`.
-2. **init** — Inicializa uma nova task (só cria pastas e description bruta; zero git, zero fetch externo)
-3. **spec** — Produz a spec canônica em `<specs_path>/{cod}.md`. Busca dados em Jira/Figma, faz Q&A focada em escopo (proibido falar de implementação), escreve REQs em EARS, ACs com IDs estáveis, cenários e NFRs. Roda `review --spec`.
-4. **plan** — Lê a spec pronta. Detecta single vs multi-project, resolve branch+base, escreve o plano focado em **HOW** (arquitetura, arquivos, passos), referenciando ACs. Não toca em escopo nem em git.
-5. **implement** — Cria a(s) branch(es) da task no git, executa o plano (subagents para tasks complexas; `code-like-me` aplicado por padrão, use `--skip-code-like-me` para desativar). Consulta a spec durante a escrita pra validar comportamento. Após escrever código, roda verificação contra `GOD/learned-patterns.md` e ajusta pequenos desvios (use `--skip-patterns-check` para desativar)
-6. **pack-up** — Finaliza a task (review, commit, push, PR — com link da spec no PR description)
+2. **spec** — Entry point do fluxo na v9. Aceita input bruto direto (Jira/texto livre), busca dados em Jira/Figma, detecta perfil da task (trivial/normal/critical), faz Q&A focada em escopo, escreve REQs em EARS, ACs com IDs estáveis, cenários e NFRs em `<specs_path>/tasks/{cod}.md`. Roda `review --spec`. Em modo `batch` (chamado por init-tree), gera spec rascunho sem Q&A.
+3. **publish-spec** *(opcional, sugerido em perfil critical)* — Publica spec em Jira/Slack/stdout pra validar com stakeholder antes do init.
+4. **init** — Cria estrutura de execução em `GOD/tasks/{cod}/` (plan.md vazio + status.md apontando pra spec, phase `specified`). Não toca em git. Aceita `--type=trivial` que pula spec inteira pra mudanças cosméticas.
+5. **plan** — Lê a spec pronta. Detecta single vs multi-project, resolve branch+base, escreve o plano focado em **HOW** (arquitetura, arquivos, passos), referenciando ACs. Não toca em escopo nem em git.
+6. **implement** — Cria a(s) branch(es) da task no git, executa o plano. Roda freshness check estendido (v9): se a spec foi atualizada via `update-spec`, lista ACs alterados, cruza com `coverage.md` e oferece reabrir passos relacionados. Consulta a spec durante a escrita. Após escrever código, valida contra `learned-patterns.md`.
+7. **pack-up** — Finaliza a task (review, commit, push, PR). Carimba `spec_version_delivered` no PR + link do `{cod}-changelog.md` se houve mudança de escopo durante a task.
 
 **Variante de entrada:**
-- **init-tree** — variante do `init` para lote: recebe um nó-raiz do Jira (Epic, Story, Task com subtasks), desce a árvore toda, cria pastas de contexto para nós internos e chama `init` para cada folha (subtask real)
+- **init-tree** — variante de inicialização em lote: recebe um nó-raiz do Jira (Epic, Story, Task com subtasks), desce a árvore, cria pastas de contexto pra nós internos e gera **specs rascunho** pra cada folha em `<specs_path>/tasks/{cod}.md` (modo `batch` da skill `spec`). **Não cria estrutura de execução por folha** — o usuário roda `spec {cod}` interativo pra refinar e `init {cod}` quando pronto.
 
 **Ferramentas auxiliares (não são parte do fluxo linear):**
 - **review** — Revisa qualidade em 3 modos: spec (`--spec` com semântica profunda; `--quick` pra só lint), descrição+spec vs plano (`--plan`), plano vs execução com cobertura de ACs (`--execution`). A partir da v8.1, cada modo delega pra **subagent isolado** com contexto fresco — fresh eyes sem viés de auto-validação
 - **publish-spec** — Publica/republica a spec em destinos configuráveis (Jira, Slack, stdout, custom). Auxiliar manual ao hook `after spec`.
 - **coverage** — Gera matriz "AC × validação" pra uma task dentro do fluxo do GOD. Parseia `// covers: AC-X` em testes + lê `coverage.md` (validações manuais). Usado pelo `pack-up` e `review --execution`, ou manual a qualquer momento. Tolerante por design — ACs órfãos viram alerta visual, decisão fica do dev.
 - **status** — Dashboard de tasks em andamento e suas fases
+- **update-spec** *(v9)* — Aplica mudança de escopo na spec de uma task que já passou por `init`. Pergunta motivo, edita spec, bumpa `spec_version`, escreve delta em `<specs_path>/tasks/{cod}-changelog.md`. Próximo `implement` detecta drift (freshness check estendido) e oferece reabrir passos.
 - **update-plan** — Atualiza o plano durante a implementação quando surgem mudanças
 - **pause** — Pausa uma task em andamento, registra observação opcional no `changelog.md` e marca `paused: true` no status. Pode ser invocada pelo usuário ou por `implement`/`plan` quando detectam barreira
 - **resume** — Retoma uma task pausada, carrega contexto do changelog, remove `paused` do status e delega de volta à skill da fase ativa
@@ -54,16 +58,17 @@ Ferramentas auxiliares (learn, update-plan, review, status, pause, resume, code-
 | Skill | Localização | Quando usar |
 |-------|-------------|-------------|
 | `install` | `sub-skills/install/SKILL.md` | Primeira vez no projeto — configura GOD |
-| `init` | `sub-skills/init/SKILL.md` | Começar uma nova task (uma de cada vez) |
-| `init-tree` | `sub-skills/init-tree/SKILL.md` | Começar em lote via árvore do Jira (Epic/Story + subtasks) |
-| `spec` | `sub-skills/spec/SKILL.md` | Produzir a spec canônica da task (escopo + ACs). Modo `--review-feedback` incorpora feedback do stakeholder. |
+| `spec` | `sub-skills/spec/SKILL.md` | **Entry point do fluxo (v9)** — produzir a spec canônica antes do init. Modos: interativo (default), `batch` (chamado por init-tree), `--review-feedback` (incorpora feedback antes do init), `--quick` (skip semântica). |
+| `init` | `sub-skills/init/SKILL.md` | Criar estrutura de execução pós-spec. Aceita `--type=trivial` pra mudanças cosméticas que pulam spec. |
+| `init-tree` | `sub-skills/init-tree/SKILL.md` | Começar em lote via árvore do Jira (Epic/Story + subtasks). Gera specs rascunho, **não** cria estrutura de execução por folha. |
 | `publish-spec` | `sub-skills/publish-spec/SKILL.md` | Publicar/republicar a spec em targets externos (Jira, Slack, stdout) — manual |
 | `coverage` | `sub-skills/coverage/SKILL.md` | Gerar matriz AC × validação pra uma task. Manual ou via pack-up/review |
 | `plan` | `sub-skills/plan/SKILL.md` | Planejar a implementação técnica (HOW) |
-| `implement` | `sub-skills/implement/SKILL.md` | Executar o plano |
-| `pack-up` | `sub-skills/pack-up/SKILL.md` | Finalizar e entregar a task |
+| `implement` | `sub-skills/implement/SKILL.md` | Executar o plano. Freshness check estendido (v9) detecta drift de spec via changelog. |
+| `pack-up` | `sub-skills/pack-up/SKILL.md` | Finalizar e entregar a task. Carimba `spec_version_delivered` no PR. |
 | `review` | `sub-skills/review/SKILL.md` | Revisão automática (chamada por plan e pack-up) |
 | `status` | `sub-skills/status/SKILL.md` | Ver estado das tasks |
+| `update-spec` | `sub-skills/update-spec/SKILL.md` | **(v9)** Aplicar mudança de escopo na spec pós-init. Bumpa `spec_version`, escreve em `{cod}-changelog.md` |
 | `update-plan` | `sub-skills/update-plan/SKILL.md` | Alterar plano durante implementação |
 | `pause` | `sub-skills/pause/SKILL.md` | Pausar task em andamento e registrar observação |
 | `resume` | `sub-skills/resume/SKILL.md` | Retomar task pausada e continuar |
@@ -79,10 +84,12 @@ Quando o usuário interagir, identifique a intenção e delegue para a sub-skill
 | Intenção do usuário | Sub-skill |
 |---------------------|-----------|
 | "instalar", "configurar", "setup" | `install` |
-| "nova task", "iniciar task", código do Jira, link do Jira | `init` |
+| "nova task", "iniciar task", código do Jira, link do Jira, "criar spec", "spec da task", "escrever spec", "escopo", "requisitos da task", "critérios de aceitação" | `spec` (entry point v9) |
+| "task trivial", "typo", "trocar copy", "atualizar dep" + código identificador | `init --type=trivial` |
+| "criar estrutura da task", "iniciar execução", "init", quando spec já foi feita | `init` |
 | "init em lote", "iniciar epic", "iniciar várias tasks", "subtasks do jira", "criar tasks da árvore" | `init-tree` |
-| "criar spec", "spec da task", "escrever spec", "escopo", "requisitos da task", "critérios de aceitação" | `spec` |
-| "feedback do PM", "stakeholder respondeu", "incorporar feedback", "atualizar spec com feedback" | `spec --review-feedback` |
+| "feedback do PM antes do init", "stakeholder respondeu", "incorporar feedback pré-init" | `spec --review-feedback` |
+| "spec mudou", "PM mudou de ideia", "mudança de escopo", "update spec", "atualizar spec depois do init" | `update-spec` |
 | "publicar spec", "republicar spec", "compartilhar spec", "publish spec" | `publish-spec` |
 | "cobertura", "coverage", "que ACs estão testados", "matriz de cobertura", "AC sem teste" | `coverage` |
 | "planejar", "criar plano", "como implementar" | `plan` |
@@ -107,7 +114,7 @@ Antes de delegar para **qualquer** sub-skill exceto `install` e `upgrade`, verif
    - Se não existe e nem `GOD/` nem `GDD/` existem → sugerir `install`.
    - Se existe → ler o valor.
 
-2. **Valor de `GOD/VERSION` corresponde à versão atual do GOD (`v8`)?**
+2. **Valor de `GOD/VERSION` corresponde à versão atual do GOD (`v9`)?**
    - Sim → prosseguir com a skill solicitada.
    - Não → alertar o usuário e sugerir `upgrade`.
 
@@ -118,14 +125,15 @@ Antes de delegar para uma sub-skill, verifique se os pré-requisitos foram cumpr
 | Sub-skill | Pré-requisitos |
 |-----------|----------------|
 | `install` | Nenhum (se `GOD/` já existe, sugerir `upgrade` em vez de reinstalar) |
-| `init` | `GOD/` deve existir e estar na versão atual. Se não existir, sugerir `install` |
-| `init-tree` | `GOD/` deve existir na versão atual; MCP Atlassian disponível e autenticado (sem isso não há como fetchar a árvore do Jira) |
-| `spec` | `GOD/tasks/{cod}/description.md` deve existir (init executado). Se não existir, sugerir rodar `init` primeiro. Precisa ler `GOD/config.md` para resolver `specs_path` — se ausente, usar default `docs/specs/`. Modo `--review-feedback` exige `spec_path` populado em `status.md` e `phase: specified` |
-| `publish-spec` | `GOD/tasks/{cod}/status.md` deve ter `spec_path` populado e o arquivo da spec deve existir. Targets desconhecidos exigem definição em `hooks.md` como `# publish-spec target: <nome>` |
-| `coverage` | `GOD/tasks/{cod}/status.md` deve ter `spec_path` populado (spec criada). Se ausente, retorna "não aplicável" silenciosamente |
-| `plan` | `GOD/tasks/{cod}/status.md` deve ter `spec_path` populado (spec executado). Se ausente, sugerir rodar `spec` primeiro. Precisa ler `GOD/patterns.md` para resolver branch — se a seção "Branch inicial" estiver ausente/vazia, orientar o usuário a preencher |
-| `implement` | `GOD/tasks/{cod}/plan.md` deve estar preenchido e `status.md` deve ter `branch` e `branch_base` populados (plan executado). Se algum estiver vazio, sugerir rodar `plan` primeiro |
+| `spec` | `GOD/` deve existir na versão atual. Aceita input bruto direto (não exige `description.md`). Precisa ler `GOD/config.md` para resolver `specs_path` — se ausente, usar default `docs/specs/`. Modo `--review-feedback` exige `<specs_path>/tasks/{cod}.md` existente e **`GOD/tasks/{cod}/status.md` ausente** (init ainda não rodou). Modo `batch` é programático (chamado por init-tree). |
+| `init` | `<specs_path>/tasks/{cod}.md` deve existir (spec rodou) — exceto em `--type=trivial`, que dispensa. Se nenhum existir, orientar `spec {cod}` ou `init {cod} --type=trivial`. |
+| `init-tree` | `GOD/` deve existir na versão atual; MCP Atlassian disponível e autenticado; `specs_path` resolvível |
+| `publish-spec` | Spec deve existir em `<specs_path>/tasks/{cod}.md`. Targets desconhecidos exigem definição em `hooks.md` como `# publish-spec target: <nome>` |
+| `coverage` | `<specs_path>/tasks/{cod}.md` deve existir (spec criada). Se ausente, retorna "não aplicável" silenciosamente |
+| `plan` | `GOD/tasks/{cod}/status.md` deve ter `spec_path` populado e ser não-trivial. Se ausente, sugerir rodar `spec` + `init`. Precisa ler `GOD/patterns.md` para resolver branch |
+| `implement` | `GOD/tasks/{cod}/plan.md` deve estar preenchido e `status.md` deve ter `branch` e `branch_base` populados (plan executado). Em modo trivial, plan é pulado e implement resolve a branch. Se algo essencial faltar, sugerir rodar `plan` primeiro |
 | `pack-up` | Deve haver alterações no git para commitar (implement executado). Se não houver, informar o usuário |
+| `update-spec` | `GOD/tasks/{cod}/status.md` deve existir (init executado) e `<spec_path>` ainda apontar pra arquivo válido. Se status.md ausente, sugerir `spec --review-feedback` em vez |
 | `update-plan` | `GOD/tasks/{cod}/plan.md` deve existir e estar preenchido |
 | `pause` | `GOD/tasks/{cod}/status.md` deve existir e `phase ≠ packed-up`; não deve estar já pausada |
 | `resume` | `GOD/tasks/{cod}/status.md` deve existir com `paused: true` |
@@ -142,19 +150,18 @@ Se o usuário retorna após uma interrupção:
 2. **Checar pausa antes de qualquer coisa** — Ler `GOD/tasks/{cod}/status.md` (campo `paused`):
    - Se `paused: true` → sugerir `resume` antes de qualquer outra skill. O contexto da pausa está em `changelog.md` e `resume` cuida da retomada
 3. **Identificar fase** — Se a task não está pausada, ler o campo `phase` e sugerir o próximo passo:
-   - `initialized` → sugerir `spec`
-   - `specified` → sugerir `plan`
+   - `initialized` *(legacy v8)* → sugerir `spec`
+   - `specified` → sugerir `plan` (ou `implement` se profile=trivial)
    - `planned` → sugerir `implement`
-   - `implementing` → sugerir continuar o `implement` ou rodar `update-plan` se o escopo mudou
+   - `implementing` → sugerir continuar o `implement` ou rodar `update-plan` se o plano mudou; rodar `update-spec` se a spec mudou
    - `implemented` → sugerir `pack-up`
    - `packed-up`:
      - Se `learned: false` → sugerir `learn` (opcional) e depois `clean-up` quando os PRs forem mergiados
      - Se `learned: true` → sugerir `clean-up` quando os PRs forem mergiados
-4. **Fallback** — Se `status.md` não existir (task criada antes desta convenção), inferir a fase pelos arquivos existentes:
-   - Só `description.md` existe → parou após `init`, sugerir `spec`
-   - `spec` em `<specs_path>/{cod}.md` existe mas `plan.md` vazio → parou após `spec`, sugerir `plan`
-   - `plan.md` preenchido mas sem alterações no git → parou antes do `implement`, sugerir `implement`
-   - Alterações no git não commitadas → parou durante ou após `implement`, sugerir `pack-up`
+4. **Fallback** — Se `status.md` não existir (task criada antes da spec rodar, fluxo v9 normal), inferir pelos artefatos:
+   - `<specs_path>/tasks/{cod}.md` existe → spec já rodou, sugerir `init {cod}` pra criar estrutura de execução
+   - Nada existe → sugerir `spec {cod}` (entry point v9) ou `init {cod} --type=trivial` se for cosmético
+   - **Casos legacy v8:** `GOD/tasks/{cod}/description.md` existe mas spec ainda não → sugerir `spec {cod}` (vai ler o description.md por retrocompat); `plan.md` preenchido mas sem alterações no git → `implement`; alterações não commitadas → `pack-up`
    - PR já criado → task finalizada
 5. **Sugerir próximo passo** — Informar o usuário onde parou e qual skill rodar
 
@@ -175,19 +182,21 @@ Quando o usuário pedir ajuda, disser "help", "o que posso fazer?", "como funcio
 O GOD orquestra o ciclo completo de uma task: da spec à entrega do PR.
 
 🚀 **Para começar, rode `install`** — isso vai configurar o projeto criando a pasta GOD/ com:
-  • VERSION — versão instalada (atualmente v8)
+  • VERSION — versão instalada (atualmente v9)
   • config.md — configuração local (specs_path: onde a spec da task vai morar)
   • knowledge.md — registro de tasks finalizadas (escrito apenas pelo `learn`)
   • patterns.md — convenções do projeto (branch, commit, PR, ações finais)
   • learned-patterns.md — regras generalizáveis escopadas (geral/linguagem/projeto), escritas pelo `learn` após revisão de PR e aplicadas pelo `implement` após a escrita de código
-  • hooks.md — pontos de extensão por step (before/after de init, plan, implement, pack-up)
-  • tasks/ — pasta onde cada task terá description, plan e status
+  • hooks.md — pontos de extensão por step (before/after de spec, init, plan, implement, pack-up)
+  • tasks/ — pasta onde cada task terá plan e status (sem `description.md` em v9 — o input bruto vai pra spec)
 
-A v8 entrega **SDD com rastreabilidade AC × validação**: cada AC declarado na spec é amarrado
-a um teste automatizado (via comentário `// covers: AC-X` parseado) ou validação manual
-(em `coverage.md`). A matriz é injetada no PR description automaticamente e alerta sobre
-ACs órfãos. A v7 já trazia hooks de propagação, review semântico, freshness check e
-publish-spec — tudo segue funcionando em conjunto.
+A v9 entrega **Spec-first + spec viva**:
+  • Spec passa a ser o entry point do fluxo: `spec → [publish-spec] → init → plan → implement → pack-up`. Spec rejeitada não polui o repo com branch órfã.
+  • 3 perfis de task: `trivial` (cosmético, pula spec via `init --type=trivial`), `normal` (sem publish-spec automático), `critical` (sugere publish-spec antes do init). Heurística com confirmação detecta perfil.
+  • Skill nova `update-spec`: aplica mudança de escopo pós-init, bumpa `spec_version`, escreve em `<specs_path>/tasks/{cod}-changelog.md`. Próximo `implement` detecta drift via freshness check estendido e oferece reabrir passos relevantes (cruzando com `coverage.md`).
+  • `pack-up` carimba `spec_version_delivered` no PR + link do changelog se houve mudança durante a task.
+  • `init-tree` adapta-se: gera specs rascunho em batch (sem Q&A), você refina cada uma com `spec {cod}` antes de `init`.
+  • Tudo da v6/v7/v8 segue funcionando: spec extraída, review semântico, freshness check, publish-spec, rastreabilidade AC × validação.
 
 Após instalar, preencha o `patterns.md` com as convenções do seu projeto. Os hooks são opcionais.
 
@@ -201,7 +210,7 @@ Integrações opcionais (não obrigatórias):
 ```
 ⚠️ **GOD detectado em versão anterior**
 
-A versão atual é v8 mas sua instalação está em {versão-detectada}.
+A versão atual é v9 mas sua instalação está em {versão-detectada}.
 
 Rode `upgrade` para migrar sua estrutura automaticamente — seus valores (patterns, tasks, knowledge) são preservados.
 ```
@@ -211,40 +220,49 @@ Rode `upgrade` para migrar sua estrutura automaticamente — seus valores (patte
 ```
 📋 **GOD — Pronto para começar!**
 
-Seu projeto está configurado. Para iniciar sua primeira task:
+Seu projeto está configurado. Para iniciar sua primeira task (v9 — spec-first):
 
-1. `init` — Passe o link/código do Jira ou descreva a task manualmente
-   → Cria a pasta e a description bruta. Não toca em git nem fetcha Jira.
-   → Para iniciar em lote a partir de um Epic/Story com subtasks, use `init-tree` (fetcha a árvore do Jira e cria contextos + tasks reais)
+1. `spec` — Entry point. Passe o link/código do Jira ou descreva a task manualmente
+   → Aceita input direto (sem `init` antes). Busca dados em Jira/Figma, faz Q&A focada em escopo
+   → Detecta perfil: `trivial` (pula spec), `normal` (default), `critical` (sugere publish-spec antes do init)
+   → Escreve REQs em EARS, ACs com IDs estáveis, cenários e NFRs em `<specs_path>/tasks/{cod}.md`
+   → Roda `review --spec` antes de finalizar
+   → Modo `--review-feedback`: incorpora feedback do stakeholder antes do init (incrementa spec_version)
+   → Modo `batch` (chamado por `init-tree`): gera spec rascunho sem Q&A
+   → Para mudança trivial (typo, copy, dep upgrade): pule pra `init {cod} --type=trivial` direto
 
-2. `spec` — Produz a spec canônica da task
-   → Busca dados em Jira/Figma, faz Q&A focada em escopo (sem falar de implementação)
-   → Escreve REQs em EARS, ACs com IDs estáveis, cenários e NFRs
-   → Spec mora em <specs_path>/tasks/{cod}.md — fora da pasta GOD/, committável por todos
-   → Roda review --spec (estrutural + lint + semântico) antes de finalizar
-   → Hook `after spec` opcional: publica automaticamente em Jira/Slack
-   → Modo `spec --review-feedback`: incorpora feedback do stakeholder (incrementa spec_version)
+2. `publish-spec` *(opcional, sugerido em perfil critical)* — Publica spec pra validação externa
+   → Targets configuráveis (Jira, Slack, stdout, custom)
+   → Use antes do `init` quando quiser travar a spec com PM/UX
 
-3. `plan` — Lê a spec pronta e produz o plano técnico
-   → Consulta knowledge por padrões, lê CLAUDE.md/ARCHITECTURE.md, resolve branch
+3. `init` — Cria estrutura de execução pós-spec
+   → `GOD/tasks/{cod}/` com plan.md vazio + status.md apontando pra spec
+   → Lê o `profile` da spec pra coerência de fase
+   → Aceita `--type=trivial` que dispensa spec (mudança cosmética)
+
+4. `plan` — Lê a spec e produz o plano técnico
+   → Consulta knowledge, lê CLAUDE.md/ARCHITECTURE.md, resolve branch
    → Foca exclusivamente em HOW (arquitetura, arquivos, passos)
    → Cada passo do plano referencia ACs específicos da spec
 
-4. `implement` — Cria a(s) branch(es) no git e executa o plano
-   → Por padrão aplica `code-like-me` (código cirúrgico que imita os devs do projeto). Use `--skip-code-like-me` para desativar.
-   → Consulta a spec durante a escrita pra validar comportamento contra ACs.
-   → Anota `// covers: AC-X` nos testes escritos (v8 — alimenta a matriz de cobertura).
-   → Após escrever código, roda verificação contra `learned-patterns.md` e ajusta pequenos desvios. Use `--skip-patterns-check` para desativar.
+5. `implement` — Cria a(s) branch(es) no git e executa o plano
+   → **Freshness check estendido (v9)**: se a spec foi atualizada via `update-spec`, lê o changelog, cruza ACs alterados com `coverage.md` e oferece reabrir passos
+   → Por padrão aplica `code-like-me`. Use `--skip-code-like-me` pra desativar
+   → Anota `// covers: AC-X` nos testes (v8 — alimenta a matriz de cobertura)
+   → Verifica contra `learned-patterns.md`
 
-5. `pack-up` — Finaliza e entrega
-   → Review (com cobertura de ACs em v8), commit, push, PR — com link da spec e tabela de cobertura no PR description
+6. `pack-up` — Finaliza e entrega
+   → Review (com cobertura de ACs em v8), commit, push, PR
+   → Carimba `spec_version_delivered` no PR + link do `{cod}-changelog.md` se houve mudança durante a task
 
 Ferramentas auxiliares (quando precisar):
-  • `publish-spec` — Publicar/republicar spec em targets externos (Jira/Slack/stdout)
-  • `coverage` — Matriz AC × validação pra uma task (manual ou via pack-up)
-  • `status` — Ver dashboard de tasks (ignora pastas de contexto do init-tree)
+  • `init-tree` — Iniciar em lote via árvore Jira (gera specs rascunho em batch)
+  • `update-spec` *(v9)* — Aplicar mudança de escopo pós-init (bumpa spec_version, escreve em changelog)
   • `update-plan` — Alterar plano durante implementação
-  • `pause` / `resume` — Pausar e retomar uma task em andamento (registra observação no changelog)
+  • `publish-spec` — Publicar/republicar spec em targets externos
+  • `coverage` — Matriz AC × validação pra uma task (manual ou via pack-up)
+  • `status` — Ver dashboard de tasks
+  • `pause` / `resume` — Pausar e retomar uma task em andamento
   • `learn` — Transformar task em conhecimento (ativação explícita)
   • `clean-up` — Arquivar tasks em `packed-up` cujos PRs já foram mergiados
   • `upgrade` — Migrar para versão mais nova do GOD
@@ -261,21 +279,22 @@ Rodar `status` internamente e apresentar o dashboard junto com a sugestão do pr
 
 💡 Sugestão: {próximo passo baseado na fase da task mais recente}
 
-Steps do fluxo:
-  • `init`         — Iniciar nova task
-  • `init-tree`    — Iniciar em lote via árvore Jira (Epic/Story + subtasks)
-  • `spec`         — Produzir a spec canônica (escopo, ACs, cenários, NFRs)
+Fluxo v9 (spec-first):
+  • `spec`         — **Entry point** (escopo, ACs, cenários, NFRs em `<specs_path>/tasks/{cod}.md`)
+  • `publish-spec` — Publicar pra validar com stakeholder (sugerido em perfil critical)
+  • `init`         — Criar estrutura de execução apontando pra spec. `--type=trivial` pula spec
+  • `init-tree`    — Iniciar em lote via árvore Jira (specs rascunho em batch)
   • `plan`         — Criar plano técnico (arquitetura, arquivos, passos — referencia ACs)
-  • `implement`    — Executar o plano (cria a branch no git)
-  • `pack-up`      — Finalizar e entregar (commit + PR com link da spec)
+  • `implement`    — Executar o plano (cria a branch no git, freshness check estendido)
+  • `pack-up`      — Finalizar e entregar (commit + PR com `spec_version_delivered` + link do changelog)
 
 Ferramentas auxiliares:
-  • `publish-spec` — Publicar/republicar spec em targets (Jira/Slack/stdout)
+  • `update-spec`  — *(v9)* Mudança de escopo pós-init: bumpa spec_version, escreve em changelog
+  • `update-plan`  — Alterar plano durante implementação
   • `coverage`     — Matriz AC × validação pra uma task
   • `learn`        — Transformar task em conhecimento (ativação explícita)
   • `clean-up`     — Arquivar tasks em `packed-up` cujos PRs já foram mergiados
   • `status`       — Ver dashboard completo
-  • `update-plan`  — Alterar plano durante implementação
   • `pause`        — Pausar task em andamento e registrar observação no changelog
   • `resume`       — Retomar task pausada
   • `upgrade`      — Migrar para versão mais nova do GOD

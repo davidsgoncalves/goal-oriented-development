@@ -44,7 +44,7 @@ Mudanças estruturais:
 
 - **Tasks v5 ativas continuam em v5.** A migração **não move ACs do `plan.md` antigo pra spec.md** automaticamente. Tasks com `phase: planned` ou `implementing` permanecem no fluxo antigo (sem spec). Quando essas tasks chegarem em `packed-up`, o ciclo termina sem spec — o que é ok pra trabalho em curso.
 - **Tasks novas começam em v6.** Após a migração, qualquer `init` rodado deve ser seguido por `spec` (não direto pra `plan`).
-- **`specs_path` é decisão importante.** Em multi-project workspace, prefira um repo dedicado (`./vakinha-specs/` ou similar) pra ter uma única fonte de verdade. Em single-project, decidir entre dentro do repo (`docs/specs/`) ou repo dedicado ao lado depende de quantos repos vão consumir as specs.
+- **`specs_path` é decisão importante.** Em multi-project workspace, prefira um repo dedicado (`./myorg-specs/` ou similar) pra ter uma única fonte de verdade. Em single-project, decidir entre dentro do repo (`docs/specs/`) ou repo dedicado ao lado depende de quantos repos vão consumir as specs.
 - **Nenhum risco de perda de dados.** A migração só adiciona arquivos e atualiza VERSION; nada é removido nem reescrito.
 
 ---
@@ -168,8 +168,8 @@ Aceita relativo (resolve a partir do diretório onde o GOD foi instalado) ou abs
 
 > Cenários:
 > - Local no repo: `docs/specs/`
-> - Workspace multi-project: `./vakinha-specs/` ou `../vakinha-specs/`
-> - Repo separado em qualquer lugar: `/Users/eu/projetos/vakinha-workspace/vakinha-specs/`
+> - Workspace multi-project: `./myorg-specs/` ou `../myorg-specs/`
+> - Repo separado em qualquer lugar: `/Users/eu/projetos/myorg-workspace/myorg-specs/`
 ```
 
 ### 4. Atualizar VERSION

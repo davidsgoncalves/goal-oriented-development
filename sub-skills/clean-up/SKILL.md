@@ -58,13 +58,13 @@ Mostrar as tasks prontas para arquivar, separadas das pendentes:
 🧹 **Clean-up — Candidatas a arquivamento**
 
 ✅ Prontas para arquivar (todos os PRs mergiados):
-  - `PROJ-123` — 2 PRs mergiados (vakinha-api#123 em 2026-04-10, vakinha-web#456 em 2026-04-11)
+  - `PROJ-123` — 2 PRs mergiados (myorg-api#123 em 2026-04-10, myorg-web#456 em 2026-04-11)
     learned: false ← ainda não aprendida
-  - `PROJ-456` — 1 PR mergiado (vakinha-api#789 em 2026-04-12)
+  - `PROJ-456` — 1 PR mergiado (myorg-api#789 em 2026-04-12)
     learned: true
 
 ⏸️ Pendentes (PRs ainda abertos ou sem merge):
-  - `PROJ-789` — vakinha-web#999 ainda em `OPEN`
+  - `PROJ-789` — myorg-web#999 ainda em `OPEN`
 
 ⚠️ Sem PR registrado em status.md:
   - `LEGACY-1` — rode `pack-up` novamente ou edite `status.md` manualmente se aplicável

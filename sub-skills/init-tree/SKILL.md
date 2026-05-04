@@ -1,13 +1,15 @@
 ---
 name: init-tree
 description: |
-  Inicializa em lote um conjunto de tasks a partir de uma árvore do Jira (tipicamente Epic → Stories → Subtasks). Desce recursivamente a árvore a partir de um nó-raiz passado pelo usuário, cria pastas em `GOD/tasks/` para cada nó — folhas (sem filhos no Jira) viram tasks reais; nós internos (pai e intermediários) viram pastas de contexto com frontmatter `kind: context`. Não toca no git. Use quando o usuário mencionar: "init em lote", "init tree", "iniciar Epic", "iniciar várias tasks", "subtasks do Jira", "criar tasks da árvore", ou passar um link/código de Epic/Story com subtasks.
+  Inicializa em lote um conjunto de tasks a partir de uma árvore do Jira (tipicamente Epic → Stories → Subtasks). Desce recursivamente a árvore a partir de um nó-raiz passado pelo usuário, cria pastas de contexto para nós internos em `GOD/tasks/` e gera specs em batch para folhas em `<specs_path>/tasks/{cod}.md`. Não cria estrutura de execução (pasta GOD/tasks/ por folha) — isso fica pro `init` rodar depois manualmente, após aprovação das specs. Não toca no git. Use quando o usuário mencionar: "init em lote", "init tree", "iniciar Epic", "iniciar várias tasks", "subtasks do Jira", ou passar um link/código de Epic/Story com subtasks.
 tools: Read, Glob, Grep, Bash, Edit, Write, Agent
 ---
 
-# Init-Tree — Sub-skill de Inicialização em Lote via Árvore do Jira
+# Init-Tree — Sub-skill de Inicialização em Lote via Árvore do Jira (v9)
 
-> Inicializa em lote as tasks de uma árvore do Jira. Recebe um nó-raiz (Epic, Story ou Task com subtasks), desce recursivamente por todos os níveis, filtra por status, confirma com o usuário e cria pastas em `GOD/tasks/`. Folhas viram tasks reais (delegadas ao `init`); nós internos viram pastas de contexto documental.
+> Inicializa em lote as tasks de uma árvore do Jira. Recebe um nó-raiz (Epic, Story ou Task com subtasks), desce recursivamente, filtra por status, confirma com o usuário e produz: (a) pastas de contexto pra nós internos em `GOD/tasks/`; (b) specs por folha em `<specs_path>/tasks/{cod}.md`. **Não cria estrutura de execução nem roda `init` por folha** — isso fica explicitamente pro usuário rodar depois, depois que as specs forem revisadas/aprovadas. Esse é o gate da inversão v9.
+
+> **Mudança v9 (spec-first em batch):** antes (v8), init-tree delegava ao `init` que criava `description.md` em cada folha. Agora delega ao `spec` em modo batch — o que cada folha recebe é uma spec rascunho gerada a partir do Jira, sem Q&A interativa. O usuário refina cada spec individualmente (`spec {cod}` interativo) e roda `init {cod}` quando aprovada.
 
 ## Banner
 
@@ -26,10 +28,12 @@ Ao iniciar esta skill, **antes de qualquer outra ação**, exiba exatamente este
 
 - MCP Atlassian disponível e autenticado (`getJiraIssue`, `searchJiraIssuesUsingJql`). Sem isso, a skill encerra com orientação para conectar.
 - `GOD/` existe na versão atual (a orquestradora já garante isso antes de delegar).
+- `GOD/config.md` com `specs_path` resolvível (ou usar default `docs/specs/`).
 
 ## Flags
 
-- `--refresh` — re-lê o Jira e atualiza o `description.md` de todas as pastas já existentes (contextos e folhas) com os dados mais recentes. Sem essa flag, pastas existentes são preservadas intactas.
+- `--refresh` — re-lê o Jira e re-roda `spec --batch` em todas as folhas já existentes (regenera spec rascunho a partir dos dados atuais do Jira). Sem essa flag, specs existentes são preservadas intactas.
+- `--skip-spec` — apenas cria pastas de contexto; não gera specs por folha. Útil se você já produziu as specs por outro caminho ou só quer mapear a árvore documentalmente.
 
 ## Instruções
 
@@ -75,31 +79,33 @@ Começando pelo nó-raiz, montar a árvore de issues descendo por todos os níve
    ```
 
 **Observações:**
-- O tipo de hierarquia no Jira varia por projeto (Epic → Story → Subtask; Task → Subtask; etc.). Usar o relacionamento parent/subtask do Jira, não assumir tipos.
-- Se o fetch de algum nó falhar (permissão, erro de API), **não abortar** o fluxo inteiro: marcar o nó como "fetch falhou" e seguir. No passo de relatório, listar os nós com falha para o usuário resolver manualmente.
+- O tipo de hierarquia no Jira varia por projeto. Usar relacionamento parent/subtask, não assumir tipos.
+- Se fetch falhar pra algum nó (permissão, erro de API), **não abortar**: marcar o nó como "fetch falhou" e seguir.
 
 ### 3. Filtrar por status
 
-1. **Ler filtro de status do `patterns.md`** — seção opcional `## Status Jira a ignorar em batch`. Se a seção não existir, usar o default:
+1. **Ler filtro de status do `patterns.md`** — seção opcional `## Status Jira a ignorar em batch`. Default:
    ```
    Done, Cancelled, Closed, Resolved, Won't Do
    ```
 
-2. **Aplicar o filtro apenas às folhas** (nós sem filhos). Contextos (nós internos) nunca são filtrados — se o usuário quer trabalhar em alguma folha do subtree, o contexto pai precisa existir.
+2. **Aplicar o filtro apenas às folhas.** Contextos (nós internos) nunca são filtrados.
 
-3. Marcar cada nó da árvore com:
-   - `will_create: true` se é contexto OU se é folha que passou no filtro
+3. Marcar cada nó:
+   - `will_create: true` se é contexto OU folha que passou no filtro
    - `will_create: false` se é folha com status filtrado
 
 ### 4. Detectar duplicatas (idempotência)
 
 Para cada nó com `will_create: true`:
-- Se `GOD/tasks/{cod-do-no}/` já existe: marcar como `existing: true` e **não tocar** (a menos que a flag `--refresh` esteja ativa, nesse caso marcar como `will_refresh: true`).
-- Se a pasta não existe: marcar como `new: true`.
+- **Contexto** — checar `GOD/tasks/{cod}/`. Se existe, marcar `existing: true`.
+- **Folha** — checar `<specs_path>/tasks/{cod}.md`. Se existe, marcar `existing: true`.
+- Se a flag `--refresh` está ativa, marcar `will_refresh: true` em ambos os casos.
+- Se a pasta/spec não existe: marcar `new: true`.
 
 ### 5. Mostrar preview + confirmação
 
-Apresentar ao usuário uma visualização da árvore indicando o que vai acontecer:
+Apresentar visualização da árvore:
 
 ```
 🌲 init-tree PROJ-100
@@ -107,35 +113,36 @@ Apresentar ao usuário uma visualização da árvore indicando o que vai acontec
 Árvore detectada no Jira:
   PROJ-100 "Epic: Redesign onboarding" (Epic)                [context, novo]
     PROJ-101 "Story: Tela de boas-vindas" (Story)            [context, novo]
-      PROJ-103 "Implementar header" (Subtask, In Progress)   [task, novo]
-      PROJ-104 "Implementar CTA" (Subtask, Backlog)          [task, novo]
-      PROJ-105 "A/B test botão" (Subtask, Done)              [task, pulado por filtro]
+      PROJ-103 "Implementar header" (Subtask, In Progress)   [spec, novo]
+      PROJ-104 "Implementar CTA" (Subtask, Backlog)          [spec, novo]
+      PROJ-105 "A/B test botão" (Subtask, Done)              [pulado por filtro]
     PROJ-102 "Story: Fluxo de senha" (Story)                 [context, existente — preservado]
-      PROJ-106 "Validação no front" (Subtask, To Do)         [task, existente — preservado]
-      PROJ-107 "Endpoint /reset" (Subtask, Cancelled)        [task, pulado por filtro]
+      PROJ-106 "Validação no front" (Subtask, To Do)         [spec, existente — preservado]
+      PROJ-107 "Endpoint /reset" (Subtask, Cancelled)        [pulado por filtro]
 
 Resumo:
-  - Criações novas:   3 contextos + 2 tasks reais
-  - Existentes:       1 contexto + 1 task (preservados)
-  - Pulados (filtro): 2 folhas
+  - Contextos novos:  3
+  - Specs novas:      2 (geradas em batch a partir do Jira, sem Q&A interativa)
+  - Existentes:       1 contexto + 1 spec (preservados)
+  - Pulados:          2 folhas (filtro de status)
+
+⚠️  Importante (v9 spec-first):
+  - Esta skill NÃO cria estrutura de execução por folha (GOD/tasks/{cod}/plan.md, status.md).
+  - Você refina cada spec depois com `spec {cod}` (Q&A interativa) e roda `init {cod}` quando aprovada.
 
 Confirmar? (sim / não)
 ```
 
-- **Sim** → prosseguir para o passo 6.
+- **Sim** → prosseguir.
 - **Não** → encerrar sem criar nada.
 
-Se o usuário quiser ajustar o filtro, orientar: "edite `GOD/patterns.md` seção `Status Jira a ignorar em batch` e rode `init-tree` de novo". Se quiser excluir um nó específico, orientar: "rode `init-tree`, aguarde a criação, e apague manualmente a pasta que não quer".
+### 6. Criar estruturas
 
-### 6. Criar estruturas — contextos e tasks
+Percorrer a árvore em **pré-ordem** (pai antes dos filhos).
 
-Percorrer a árvore em **pré-ordem** (pai antes dos filhos) para garantir que cada filho saiba o código do pai imediato.
+**Para nó interno (contexto):**
 
-Para cada nó com `will_create: true` e `new: true`:
-
-**Se é contexto (nó interno, com filhos):**
-
-Criar pasta `GOD/tasks/{cod-do-no}/` contendo **apenas** `description.md` (não cria `plan.md` nem `status.md` — contextos não passam por plan/implement):
+Criar pasta `GOD/tasks/{cod-do-no}/` contendo apenas `description.md` (não tem `plan.md` nem `status.md` — contextos não passam por execução):
 
 ```markdown
 ---
@@ -159,27 +166,53 @@ children: [{cod-filho-1}, {cod-filho-2}, ...]
 
 ## Filhos diretos
 
-{lista dos filhos diretos, com código e título de cada um — útil pra humano navegar a árvore}
+{lista dos filhos diretos, com código e título de cada um}
 
 ---
 
-> Esta é uma pasta de contexto (não uma task real). Não há `plan.md` nem `status.md` aqui. As tasks reais (folhas) estão em pastas irmãs dentro de `GOD/tasks/`.
+> Esta é uma pasta de contexto (não uma task real). Não há `plan.md` nem `status.md` aqui. As tasks reais (folhas) têm spec em `<specs_path>/tasks/` e estrutura de execução em `GOD/tasks/{cod}/` quando o usuário roda `init {cod}` após aprovar a spec.
 ```
 
-**Se é folha (task real):**
+**Para folha (task real):**
 
-Delegar à skill `init` passando:
-- **código da task** = código do Jira da folha
-- **input bruto** = link do Jira (`https://.../browse/{cod}`) para que o `plan` futuramente fetche os detalhes
-- **parent** = código do pai imediato (será gravado no frontmatter de `description.md`)
+Se a flag `--skip-spec` está ativa, pular a folha (apenas registrar no relatório).
 
-A skill `init` cria `description.md` (com `kind: task`, `parent: {pai}`), `plan.md` vazio e `status.md` com `phase: initialized`, `branch: null`, `branch_base: null`.
+Caso contrário, **delegar à skill `spec` em modo batch**:
 
-Para cada nó com `will_refresh: true` (flag `--refresh` ativa):
-- **Contextos:** reescrever `description.md` com os dados atualizados do Jira (preservar ordem dos campos; `children` reflete a árvore atual — pode ter ganho ou perdido filhos).
-- **Folhas (tasks reais):** reescrever apenas o bloco "Descrição" do `description.md` com o texto atualizado do Jira, **preservando** qualquer enriquecimento já feito por `plan` (Q&A, links de Figma, tasks semelhantes). Se a descrição já foi enriquecida, anexar um bloco no final: `> Atualizado do Jira em {timestamp} por init-tree --refresh`.
+- Invocar `spec` programaticamente passando:
+  - `code`: código do Jira da folha
+  - `mode`: `batch` (sinaliza modo não-interativo)
+  - `parent`: código do pai imediato (registrar no contexto)
+  - `link`: URL do Jira
 
-**Falha parcial:** se a criação de um nó falhar (erro de filesystem, permissão, etc.), registrar o erro, continuar com os próximos nós. Persistir o que foi criado.
+- A skill `spec` em modo batch deve:
+  - Buscar dados do Jira (passo 2 do spec)
+  - Pular Q&A interativa (passo 6 do spec)
+  - Aplicar perfil heurístico SEM confirmação interativa (default `normal`)
+  - Escrever spec em `<specs_path>/tasks/{cod}.md` com frontmatter:
+    ```yaml
+    spec_version: 1
+    task: {cod}
+    profile: {normal|critical}  # heurística sem confirmação
+    draft: true                  # sinaliza spec rascunho — pendente de Q&A interativa
+    created_at: ...
+    updated_at: ...
+    ```
+  - Não rodar `review --spec` (será rodado quando o usuário refinar com `spec {cod}` interativo)
+  - Não rodar hook `after spec` (evita publicação prematura de rascunho)
+  - Retornar silenciosamente
+
+> **Comportamento idempotente:** se a spec já existe e `--refresh` não está ativo, init-tree pula essa folha (nem chama `spec`). Se `--refresh` está ativo, re-chama `spec --batch` que sobrescreve a spec existente preservando a flag `draft` se a spec original ainda for rascunho.
+
+**Para `will_refresh: true` (flag `--refresh`):**
+- **Contextos:** reescrever `description.md` com dados atualizados do Jira (preservar ordem dos campos; `children` reflete a árvore atual).
+- **Specs (folhas):** re-chamar `spec --batch` que regenera o conteúdo. Se a spec existente já tinha `draft: false` (foi refinada via `spec` interativo), **não sobrescrever** — apenas atualizar a seção `## Input bruto` da spec com o novo texto do Jira e adicionar nota:
+
+  ```markdown
+  > Atualizado do Jira em {timestamp} por init-tree --refresh. Estrutura preservada (spec já refinada).
+  ```
+
+**Falha parcial:** se a criação de algum nó falhar, registrar erro, continuar. Persistir o que foi criado.
 
 ### 7. Reportar resultado
 
@@ -188,11 +221,11 @@ Para cada nó com `will_refresh: true` (flag `--refresh` ativa):
 
 Criadas:
   📁 3 pastas de contexto (Epic + 2 Stories)
-  📄 2 tasks reais (PROJ-103, PROJ-104)
+  📐 2 specs rascunho (PROJ-103, PROJ-104) em <specs_path>/tasks/
 
 Preservadas (já existiam):
   📁 PROJ-102 (contexto)
-  📄 PROJ-106 (task — fase atual: planned)
+  📐 PROJ-106 (spec, draft: false — refinada anteriormente)
 
 Puladas (filtro de status):
   PROJ-105 (Done), PROJ-107 (Cancelled)
@@ -200,20 +233,23 @@ Puladas (filtro de status):
 Falhas (se houver):
   ⚠️ PROJ-XXX — {motivo}
 
-💡 Próximos passos:
-  - Rode `plan PROJ-103` para planejar a primeira task
-  - Rode `plan PROJ-104` quando for pegar a segunda
-  - Pastas de contexto (PROJ-100, PROJ-101, PROJ-102) não têm `plan`/`implement` — são apenas referência documental
-  - Se quiser atualizar descrições a partir do Jira, rode `init-tree PROJ-100 --refresh`
+💡 Próximos passos (v9):
+  1. Refine as specs rascunho rodando `spec {cod}` por folha — abre Q&A interativa, classifica perfil, valida com `review --spec`. As novas: PROJ-103, PROJ-104.
+  2. Quando a spec estiver aprovada (e publicada via `publish-spec` se for crítica), rode `init {cod}` pra criar estrutura de execução.
+  3. Pastas de contexto (PROJ-100, PROJ-101, PROJ-102) ficam só como referência documental — não passam por plan/implement.
+  4. Pra atualizar a partir do Jira, rode `init-tree PROJ-100 --refresh`.
 ```
 
 ---
 
 ## Guard-rails
 
-- **Esta skill não toca no git.** Nem em folhas nem em contextos. Git é responsabilidade exclusiva do `implement` (cria branch da folha) — contextos nunca têm branch.
+- **Esta skill não toca no git.** Nem em folhas nem em contextos.
 - **Esta skill não escreve em `GOD/knowledge.md`.** Apenas a skill `learn`.
-- **Esta skill não chama `plan` nem `implement` automaticamente.** Downstream é sempre manual, uma folha por vez.
-- **Esta skill não apaga pastas existentes.** Sem `--refresh`, existentes são preservadas intactas. Com `--refresh`, descrições são atualizadas mas `plan.md`/`status.md` das folhas existentes nunca são tocados.
-- **Esta skill não assume nomes de status Jira.** Usa a lista configurável em `patterns.md` (seção `## Status Jira a ignorar em batch`) ou o default documentado.
-- **Esta skill não aborta em falha parcial.** Continua criando o que der, reporta o que falhou no final.
+- **Esta skill não chama `init`/`plan`/`implement` automaticamente.** Downstream é sempre manual, uma folha por vez. Esse é o gate da inversão v9: spec primeiro, execução só depois de aprovação humana.
+- **Esta skill não roda Q&A interativa nas specs em batch.** Specs nascem como `draft: true` e o usuário refina depois. Tentar fazer Q&A em batch pra 50 folhas vira teatro — usuário não vai responder com qualidade pra cada uma.
+- **Esta skill não publica specs (não roda hook `after spec`).** Rascunho não é pra ser publicado.
+- **Esta skill não cria `GOD/tasks/{cod}/plan.md` ou `status.md` pra folhas.** Estrutura de execução nasce com `init {cod}`, nunca aqui.
+- **Esta skill não apaga pastas existentes.** Sem `--refresh`, existentes preservadas intactas. Com `--refresh`, descrições/specs são atualizadas mas estrutura de execução (se já criada via `init`) nunca é tocada.
+- **Esta skill não assume nomes de status Jira.** Usa lista configurável em `patterns.md` ou default documentado.
+- **Esta skill não aborta em falha parcial.** Continua criando o que der, reporta no final.

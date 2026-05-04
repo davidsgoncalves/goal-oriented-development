@@ -2,15 +2,17 @@
 
 > Plano técnico de evolução do framework GOD, do estado atual até virar **SDD de verdade**, dentro do escopo da realidade onde ele é usado: time pequeno, releases diários, escopo que muda, arquitetura assistida (não imposta), spec é lei quando chega ao dev.
 
-> **Status:** Fases 1 (v6), 2 (v7) e 3 (v8) entregues. Patch v8.1: peer-review via subagent isolado nos 3 modos do `review`.
+> **Status:** Fases 1 (v6), 2 (v7), 3 (v8) e 4 (v9) entregues. Patch v8.1: peer-review via subagent isolado nos 3 modos do `review`. Patch v8.2: default target do publish-spec configurável.
 >
 > **Resumo das fases:**
 > - v6: spec extraída em path configurável.
 > - v7: hooks de propagação ativa, review semântico profundo, freshness check, `spec --review-feedback`, `publish-spec`.
 > - v8: rastreabilidade AC × validação via comentário `// covers: AC-X` + `coverage.md`; `coverage` skill nova; `pack-up` injeta tabela no PR; `review --execution` ganha eixo de cobertura.
-> - **v8.1 (patch retrocompatível):** os 3 modos do `review` (`--spec`, `--plan`, `--execution`) passam a executar via subagent (`Explore` pra spec/plan; `general-purpose` pra execution). Elimina viés de auto-validação ("eu escrevi isso, parece bom"). Sem migration — VERSION continua `v8`.
+> - **v8.1 (patch retrocompatível):** os 3 modos do `review` (`--spec`, `--plan`, `--execution`) passam a executar via subagent (`Explore` pra spec/plan; `general-purpose` pra execution). Elimina viés de auto-validação. Sem migration.
+> - **v8.2 (patch retrocompatível):** `publish-spec` aceita default em `GOD/config.md`.
+> - v9: spec-first (inverte ordem `init→spec` para `spec→init`) + spec viva (`update-spec` + changelog).
 >
-> Próxima: Fase 4 (v9) — Spec viva (versionamento de mudança de escopo, feature spec eterna + delta + propagação).
+> Próxima: Fase 5 (v10) — Architecture advisor.
 
 ## Como ler este documento
 
@@ -34,7 +36,7 @@ Não execute fases fora de ordem. Cada uma assume os artefatos das anteriores co
 | 1 | v6 | Spec extraída | **entregue** | Nenhuma |
 | 2 | v7 | Spec validável | **entregue** | Nenhuma |
 | 3 | v8 | AC rastreável | **entregue** | Nenhuma |
-| 4 | v9 | Spec viva | a fazer | Nenhuma |
+| 4 | v9 | Spec-first + spec viva | **entregue** | Nenhuma |
 | 5 | v10 | Architecture advisor | a fazer | Baixa (preencher principles) |
 | 6 | v11 | Multi-autor | a fazer | Alta (mandato + equipe) |
 
@@ -246,39 +248,79 @@ Baixo se o link AC↔teste for **leve** (comentário). Se virar formulário, vir
 
 ---
 
-## Fase 4 — Spec viva (v9)
+## Fase 4 — Spec-first + spec viva (v9) — ENTREGUE
 
-### Por que é crítico
-Em ambiente de releases diários e escopo que muda, a mudança hoje é **invisível**: PM muda de ideia, dev refaz, ninguém registra. Em SDD canônico isso é catastrófico (spec congelada vira mentira). Em SDD adaptado, **mudança de spec é primeira-classe**.
+### Por que reformular
+
+Duas mudanças entram juntas porque são facetas do mesmo princípio: **spec é o artefato canônico do trabalho, não rascunho paralelo**.
+
+1. **Inversão da ordem (`init→spec` vira `spec→init`).** Hoje `init` precede `spec` — resíduo da v5 goal-oriented, antes da spec virar artefato próprio na v6. Em SDD canônico, spec é gate: precede branch e setup de execução. Spec rejeitada não deveria deixar branch órfã no repo.
+2. **Spec viva.** Em ambiente de releases diários e escopo que muda, mudança hoje é invisível — PM muda de ideia, dev refaz, ninguém registra. Em SDD canônico isso é catastrófico (spec congelada vira mentira). Em SDD adaptado, mudança de spec é primeira-classe.
+
+Combinadas, fazem da spec o gate de entrada (precede commit) e de saída (versão entregue carimbada no PR).
 
 ### O que entrega
-- Spec versionada: cada mudança na `spec.md` gera entrada em `spec-changelog.md`
-- Skill `update-spec` (paralela do `update-plan`): formaliza mudança de escopo
-- `pack-up` registra qual **versão da spec** foi entregue (hash ou número)
+
+**Inversão da ordem:**
+- `spec` precede tudo. Lê Jira/input bruto, gera `<specs_path>/tasks/{cod}.md` direto, sem precisar de branch. Captura o input bruto que antes morava em `init` (`description.md`).
+- `init` se reposiciona: roda **depois** de `spec`. Cria branch + `status.md` (`phase: planned`) apontando pra spec já existente.
+- 3 perfis de task com fluxos calibrados (evitam cerimônia injustificada):
+  - **Trivial** (copy, typo, dep upgrade): `init --type=trivial` pula `spec` inteira.
+  - **Normal**: `spec --quick` (sem publish-spec) seguido de `init`.
+  - **Crítica**: `spec` → `publish-spec` → aguarda validação stakeholder → `init`.
+- Detecção heurística de perfil (description curta + sem stakeholder = trivial; longa + Jira rico = crítica), com flag de override.
+- `init-tree` adapta-se: roda specs em batch, pausa pra aprovação, depois cria branches.
+
+**Spec viva:**
+- `<specs_path>/tasks/{cod}.md` ganha `spec_version: N` (já parcial da v6, agora consolidado) e timestamps de criação/atualização.
+- Sub-skill `update-spec` (paralela do `update-plan`): formaliza mudança de escopo pós-`init`. Q&A do motivo, edita spec, bumpa `spec_version`, escreve delta em `<specs_path>/tasks/{cod}-changelog.md`.
+- `implement` ganha freshness check estendido: se `spec_version` mudou desde último consumo, lista ACs alterados, cruza com `coverage.md` (v8) pra apontar arquivos/testes afetados, oferece reabrir passos.
+- `pack-up` carimba `spec_version_delivered` em `status.md` e injeta no PR description.
+
+### Decisões tomadas durante a implementação
+
+1. **`init` mantido com mesmo nome.** Cabeça muscular do usuário continua, só o escopo muda (de "criar pasta + capturar input" para "criar estrutura de execução pós-spec"). Renomear pra `start` foi avaliado e rejeitado — quebra docs e gera ruído sem ganho real.
+2. **Changelog em arquivo separado:** `<specs_path>/tasks/{cod}-changelog.md`. Diff fica limpo, spec não cresce indefinidamente, fácil de listar histórico.
+3. **Detecção de perfil sempre confirma.** Heurística sempre roda (mesmo sem ambiguidade aparente) e propõe ao usuário, custo baixo evita pular publish-spec em task crítica detectada como normal. Flag `--type=normal|critical` força sem heurística.
+4. **`--type=trivial` é exclusivo do `init`.** A skill `spec` não aceita `--type=trivial` — tentar gerar "spec mínima" pra typo polui o repo de specs. Trivial pula spec inteira.
+5. **Migração v8→v9 sem migrator automático.** Tasks com `phase: planned` ou posterior continuam fluxo v8 até `packed-up`. Apenas tasks novas (spec pós-v9) entram no fluxo invertido. Spec da v9 detecta `GOD/tasks/{cod}/description.md` legacy e lê de lá pra retrocompat.
+6. **`description.md` deixa de existir em tasks v9.** Input bruto vira seção `## Input bruto` da própria spec. Tasks legacy mantêm o arquivo intacto.
+7. **Hook `after spec` continua sempre disparando** (independente do perfil). Perfil afeta apenas a sugestão final ao usuário sobre rodar `publish-spec` manual. Mudar comportamento do hook por perfil quebraria expectativa de quem já configurou.
+8. **`init-tree` chama `spec` em modo `batch`** (não chama mais `init` direto). Modo batch pula Q&A interativa, pula review, pula hook `after spec`, marca spec com `draft: true`. Usuário refina cada spec individualmente (`spec {cod}` interativo) e roda `init {cod}` quando aprovada.
+9. **`update-spec` não muda `phase` da task nem `spec_version_consumed`.** Apenas publica a mudança no changelog. O consumidor (`implement` no próximo run) decide quando "consumiu" a nova versão.
+10. **Freshness check estendido cruza com `coverage.md`** quando existe (v8). Se changelog ausente (mudança feita sem `update-spec`), trata todos os ACs como potencialmente afetados — degradação consciente.
 
 ### Modificações nas sub-skills
 
 | Skill | Mudança |
 |-------|---------|
-| `spec.md` | Ganha frontmatter com versão (v1, v2, ...) e timestamp |
-| `update-spec` (NOVA) | Pergunta motivo da mudança, edita spec, registra delta no changelog |
-| `implement` | Checa se spec mudou desde o último consumo. Se sim, reabre código que tocava nos ACs alterados |
-| `pack-up` | Carimba versão da spec entregue no PR |
+| `spec` | Roda **antes** de `init`. Não depende de branch. Escreve direto em `<specs_path>/tasks/{cod}.md`. Captura input bruto (Jira/texto livre). Ganha `--quick` (skip publish-spec) |
+| `init` | Roda **depois** de `spec`. Cria branch + `status.md` apontando pra spec existente. Aceita `--type=trivial` (pula spec) e `--type=normal/critical` (override do perfil) |
+| `init-tree` | Adapta pra fluxo em duas fases: gera specs em batch, pausa, depois cria branches em batch |
+| `update-spec` (NOVA) | Q&A motivo, edita spec, bumpa `spec_version`, escreve no changelog. Roda em qualquer fase pós-`planned` |
+| `implement` | Freshness check estendido: cruza ACs alterados com `coverage.md` (v8), oferece reabrir passos |
+| `pack-up` | Carimba `spec_version_delivered`, injeta no PR description |
 
 ### Pré-requisitos
-- **Técnicos:** Fase 1 (v6). Idealmente Fase 3 (v8), pra mudança de AC saber qual teste invalida.
-- **Organizacionais:** zero. É controle interno.
+- **Técnicos:** Fase 1 (v6). Idealmente Fase 3 (v8), pra freshness check usar matriz de cobertura.
+- **Organizacionais:** zero. Inversão é interna; spec viva é controle interno.
 
 ### Esforço de build
-~2 dias. Maior parte é o `update-spec` e o link com `update-plan` existente.
+~3-4 dias. Inversão da ordem mexe em mais skills do que a "spec viva" original entregava sozinha.
 
 ### Ganho
-- "Mudou no meio" vira evento consciente, não acidente
-- Histórico de mudanças por feature — alavanca de retrospectiva
-- Argumento concreto: **"SDD não engessa, torna mudança visível"** vira fato, não promessa
+- **Spec vira gate, não rascunho.** Spec rejeitada não polui repo com branch órfã.
+- **Validação externa fica natural.** PM viajou? Spec espera. Hoje, dev é tentado a "começar codando" e descartar trabalho quando resposta muda escopo.
+- **Spec compartilhável sem branch.** Tech lead revisa em main, sem checkout.
+- **v11 (multi-autor) deixa de precisar gambiarra.** Se PM/UX co-escrevem spec, ela tem que preceder branch — invertido, é natural.
+- **Match com SDD canônico** (Specify Kit, spec-kit). Adaptação peculiar continua, alinhamento conceitual melhora.
+- **"Mudou no meio" vira evento consciente.** Histórico por feature, alavanca de retrospectiva.
+- **3 perfis evitam cerimônia em task trivial.** Typo não passa por publish-spec.
 
 ### Risco
-Baixíssimo. Usado só quando precisa.
+- **Quebra retrocompat.** Migration pra tasks novas; ativas continuam no v8 até `packed-up`.
+- **Heurística de perfil pode errar.** Mitigação: confirmação rápida quando inferência incerta, em vez de pular silenciosamente.
+- **Custo de aprender ordem nova.** Mitigado por mensagem do `init` quando rodado sem spec prévia ("rode `spec` primeiro ou use `init --type=trivial` se for mudança cosmética").
 
 ---
 
@@ -366,7 +408,7 @@ Alto. Esta fase **morre** se a empresa não comprar antes.
 ## Como decidir até onde ir
 
 ### Rota A — SDD solo robusto (sem mandato)
-**v6 + v7 + v8 + v9.** Pare. SDD adaptado e funcional, sem dependência de ninguém. Esforço total: ~2 semanas distribuídas em 4 releases.
+**v6 + v7 + v8 + v9.** Pare. SDD adaptado e funcional, sem dependência de ninguém. Esforço total: ~2-3 semanas distribuídas em 4 releases (v9 maior por incluir inversão da ordem).
 
 ### Rota B — SDD solo + advisor arquitetural
 **v6 + v7 + v8 + v9 + v10.** Adiciona principles e architecture. +2-3 dias.
@@ -412,7 +454,7 @@ Para o GOD virar SDD de verdade no escopo atual, o caminho mínimo é 4 fases in
 1. **v6 — Extrair spec** (`spec.md` separada, EARS leve, sub-skill nova)
 2. **v7 — Validar spec** (review --spec, publicação opcional)
 3. **v8 — Rastrear ACs** (ID estável, cobertura por teste ou validação manual)
-4. **v9 — Versionar spec** (mudança de escopo como evento de primeira-classe)
+4. **v9 — Spec-first + versionar spec** (inverte ordem `init→spec` para `spec→init`; mudança de escopo como evento de primeira-classe)
 
 Tudo solo, sem dependência organizacional. Architecture advisor (v10) e multi-autor (v11) são extensões que dependem de decisões da empresa e devem ser implementadas apenas com sinal claro.
 

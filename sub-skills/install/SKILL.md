@@ -30,7 +30,7 @@ Quando o usuário invocar esta skill, execute os seguintes passos **na ordem**:
 
 Antes de qualquer coisa, verificar o estado das pastas no diretório raiz.
 
-- **Se `GOD/` existe e tem `GOD/VERSION` com conteúdo `v8`:** informar que o projeto já está instalado na versão atual e encerrar.
+- **Se `GOD/` existe e tem `GOD/VERSION` com conteúdo `v9`:** informar que o projeto já está instalado na versão atual e encerrar.
 - **Se `GOD/` existe mas `GOD/VERSION` não existe (ou aponta pra versão anterior):** informar que é uma instalação de versão antiga e sugerir rodar a skill `upgrade` em vez de reinstalar. Não sobrescrever arquivos existentes.
 - **Se `GOD/` não existe mas `GDD/` existe:** instalação legada da skill GDD detectada. Informar o usuário e sugerir rodar `upgrade` (ou `migrate`) para migrar automaticamente de GDD para GOD. Não instalar do zero — os dados do usuário (tasks, knowledge, patterns, hooks) serão preservados pela migração. Encerrar sem criar nada.
 - **Se nem `GOD/` nem `GDD/` existem:** prosseguir com a instalação.
@@ -50,7 +50,7 @@ GOD/
 └── tasks/
 ```
 
-- `VERSION` — arquivo com conteúdo `v8` (uma linha, sem espaços)
+- `VERSION` — arquivo com conteúdo `v9` (uma linha, sem espaços)
 - `config.md` — configuração local do GOD nesse projeto (ver passo 1.5 abaixo). Contém `specs_path` (onde a spec da task vai morar)
 - `knowledge.md` — criado com template padrão (ver seção abaixo)
 - `patterns.md` — criado com template padrão (ver seção abaixo)
@@ -167,7 +167,7 @@ Aceita relativo (resolve a partir do diretório onde o GOD foi instalado) ou abs
 
 > Cenários:
 > - Local no repo: `docs/specs/`
-> - Workspace multi-project: `./vakinha-specs/` ou `../vakinha-specs/`
+> - Workspace multi-project: `./myorg-specs/` ou `../myorg-specs/`
 > - Repo separado em qualquer lugar: `/Users/eu/projetos/<workspace>/<repo-de-specs>/`
 
 ## publish_spec_default_target
@@ -193,7 +193,7 @@ Substituir `{specs_path}` pelo valor decidido. A seção `publish_spec_default_t
 Conteúdo exato:
 
 ```
-v8
+v9
 ```
 
 ### 3. Preencher template do `knowledge.md`
@@ -364,7 +364,7 @@ Nenhuma dessas integrações é obrigatória, mas sem `gh` a experiência do `pa
 Montar a resposta listando o que está ok e o que está faltando:
 
 ```
-✅ Instalação v8 concluída! Estrutura GOD criada.
+✅ Instalação v9 concluída! Estrutura GOD criada.
 
 📐 Repo de specs configurado: {specs_path}
    • Pasta {criada / já existia}
@@ -386,7 +386,7 @@ Montar a resposta listando o que está ok e o que está faltando:
   1. Preencha `GOD/patterns.md` com as convenções do seu projeto
   2. (Opcional) Preencha slots de `GOD/hooks.md` que você quer customizar
   3. `GOD/learned-patterns.md` começa vazio — a skill `learn` vai preenchê-lo após a revisão de PR
-  4. Rode `init` para iniciar sua primeira task. Fluxo: init → spec → plan → implement → pack-up
+  4. Rode `spec` para iniciar sua primeira task (v9 spec-first). Fluxo: spec → [publish-spec] → init → plan → implement → pack-up. Pra mudança trivial (typo, copy), pule direto pra `init {cod} --type=trivial`.
 ```
 
 ---

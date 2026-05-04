@@ -132,7 +132,7 @@ O `specs_path` é configurável no `install`. Quatro cenários comuns:
 | Cenário | Path típico | Quando usar |
 |---------|-------------|-------------|
 | **Local no repo** | `docs/specs/` | Single-project, time pequeno, specs pertencem ao próprio repo |
-| **Repo dedicado no workspace** | `./vakinha-specs/` (multi-project) ou `../vakinha-specs/` (single-project) | Multi-project workspace, specs visíveis pra todos os repos |
+| **Repo dedicado no workspace** | `./myorg-specs/` (multi-project) ou `../myorg-specs/` (single-project) | Multi-project workspace, specs visíveis pra todos os repos |
 | **Repo dedicado em qualquer lugar** | `/Users/eu/projetos/empresa-specs/` | Path absoluto livre, usado quando specs vivem fora dos workspaces de código |
 | **Pasta sem git** | qualquer um dos acima | Specs documentadas mas não versionadas separadamente |
 
@@ -189,8 +189,8 @@ branch: task/PROJ-123/add-phone-field
 branch_base: main
 learned: false
 prs:
-  - https://github.com/org/vakinha-api/pull/123
-  - https://github.com/org/vakinha-web/pull/456
+  - https://github.com/org/myorg-api/pull/123
+  - https://github.com/org/myorg-web/pull/456
 ---
 ```
 

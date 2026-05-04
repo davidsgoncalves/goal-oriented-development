@@ -43,7 +43,7 @@ A v2 traz 4 mudanças estruturais:
 
 - Se o `pack-up-instructions.md` do usuário tiver seções renomeadas ou faltando, a migração pode deixar campos em branco. Nesses casos, alertar o usuário e perguntar como preencher.
 - Se o usuário tiver editado manualmente a estrutura do `pack-up-instructions.md` (adicionou seções novas), essas seções extras serão movidas pra um bloco `## Outras convenções` no final do `patterns.md` e reportadas pro usuário.
-- Se o usuário tiver múltiplos projetos com branches iniciais diferentes (caso do exemplo Vakinha), preservar o formato de lista em `patterns.md`.
+- Se o usuário tiver múltiplos projetos com branches iniciais diferentes, preservar o formato de lista em `patterns.md`.
 - **Tasks legadas no estado `initialized` (pós-`init` v1, pré-`plan` v1):** podem ter descrição parcialmente enriquecida (dependendo de até onde o init v1 chegou antes da interrupção). A v2 aceita ambos os estados, mas vale reportar ao usuário na seção de relatório final quantas tasks em `initialized` existem, para que ele saiba que ao rodar `plan` essas tasks podem ter fluxo diferente.
 
 ---
