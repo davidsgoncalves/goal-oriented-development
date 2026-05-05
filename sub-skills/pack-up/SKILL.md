@@ -70,6 +70,47 @@ Chamar a sub-skill `coverage --task {cod} --format markdown` pra gerar a tabela 
 
 - Tasks **sem spec** (raras na v8 — só tasks pré-v6 que sobreviveram): `coverage` retorna "não aplicável", e este passo vira no-op (nenhuma tabela injetada).
 
+### 4.6. Gerar tabela de BRs (v10, se `applicable_rules` populado)
+
+Se a spec tem `applicable_rules` no frontmatter (lista não-vazia) e `domains_path` está configurado em `GOD/config.md`:
+
+1. **Parsear comentários `// rule:` no diff da task** (`git diff <branch_base>...HEAD`):
+   - Regex unificada compatível com TS/JS/Ruby/Python/Go/Java/C#: linhas iniciando por `//`, `#` ou `--` seguidas de `rule: BR-<DOMINIO>-<N>`. Mesma família da regex do `// covers:` da v8.
+   - Extrair par `(BR-ID, file:line)` pra cada match.
+
+2. **Cruzar com `applicable_rules` da spec:**
+   - Pra cada BR-ID em `applicable_rules`, verificar se aparece em algum match do diff.
+   - Marcar `✅` se anotado, `⚠️` se declarado mas não anotado.
+
+3. **Gerar tabela markdown:**
+
+   ```markdown
+   📜 **BRs aplicáveis × anotadas**
+
+   | BR | Status | Anotações no código |
+   |----|--------|---------------------|
+   | BR-PAYMENTS-001 | ✅ | src/vakinha.service.ts:42 |
+   | BR-PAYMENTS-007 | ✅ | src/vakinha.service.ts:55, src/meta.guard.ts:18 |
+   | BR-AUTH-003 | ⚠️ | (declarada aplicável mas sem anotação no diff) |
+
+   **Resumo:** 3 BRs aplicáveis · 2 anotadas · 1 órfã
+   ```
+
+4. **Capturar saída** pra injetar no PR description (passo 7).
+
+5. **Alertar BRs órfãs** ao usuário no terminal:
+
+   > ⚠️ {N} BRs aplicáveis declaradas em `applicable_rules` não foram anotadas no código. Possíveis razões:
+   > - A invariante já está enforced em código existente (não tocado por esta task) → adicionar nota em `coverage.md`.
+   > - A invariante não cabe nesta task (será coberta em outra) → considerar remover do `applicable_rules` da spec.
+   > - Faltou anotar `// rule: BR-X` durante o `implement` → voltar e anotar.
+   >
+   > Quer (a) voltar pro implement, (b) editar `coverage.md` pra justificar, (c) prosseguir mesmo assim?
+
+   Default tolerante — não bloqueia o pack-up. Decisão fica do dev.
+
+6. **Tasks sem `applicable_rules`** (lista vazia ou ausente, ou `domains_path` desativado): pular este passo silenciosamente. Nenhuma tabela injetada no PR.
+
 ### 5. Commit
 
 Criar o commit seguindo o **padrão de mensagem de commit** definido no `patterns.md`:
@@ -124,6 +165,21 @@ Criar o Pull Request seguindo o **padrão de mensagem de PR** definido no `patte
   ```
 
   Tasks sem spec não geram este bloco.
+- **Anexar tabela de BRs** (a partir da v10, se `applicable_rules` populado e `domains_path` configurado): logo após a matriz de cobertura, injetar a saída do passo 4.6:
+
+  ```markdown
+  📜 **BRs aplicáveis × anotadas**
+
+  | BR | Status | Anotações no código |
+  |----|--------|---------------------|
+  | BR-PAYMENTS-001 | ✅ | src/vakinha.service.ts:42 |
+  | BR-PAYMENTS-007 | ✅ | src/vakinha.service.ts:55, src/meta.guard.ts:18 |
+  | BR-AUTH-003 | ⚠️ | (declarada aplicável mas sem anotação no diff) |
+
+  **Resumo:** 3 BRs aplicáveis · 2 anotadas · 1 órfã
+  ```
+
+  Tasks sem `applicable_rules` ou com `domains_path` desativado não geram este bloco.
 - Capturar a URL do PR retornada por `gh pr create` — será salva no `status.md` no próximo passo
 
 ### 8. Atualizar status para `packed-up`

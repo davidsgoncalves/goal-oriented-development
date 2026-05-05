@@ -11,6 +11,15 @@ tools: Read, Glob, Grep, Bash, Edit, Write, Agent
 
 > **Mudança v6:** Q&A de escopo, busca em Jira/Figma e ACs migraram pra skill `spec`. Esta skill agora é puramente sobre HOW.
 
+> **Mudança v10:** lê `principles_path` e `architecture_path` (configurados em `GOD/config.md`) e gera bloco "Considerações arquiteturais" no plan.md, sinalizando desvios sem bloquear. Lista também `applicable_rules` da spec na "Spec de referência".
+
+## Flags
+
+- `--skip-architecture` — pula leitura de principles/architecture mesmo se configurados. Útil pra plano rápido onde o overhead não vale.
+- `--refactor` — modula tom: desvios viram "oportunidade de refator alinhada com architecture.md".
+- `--preserve` — modula tom: cada desvio detectado pede justificativa explícita ("preservar padrão atual mesmo divergindo").
+- Sem flag → tom neutro: lista desvios e oferece (a) refatorar, (b) preservar com justificativa, (c) ajustar plan.
+
 ## Instruções
 
 Quando o usuário invocar esta skill, execute os seguintes passos **na ordem**:
@@ -114,6 +123,27 @@ Buscar e ler arquivos canônicos de **arquitetura/convenções de código** na r
 
 A busca é case-insensitive. **Não ler `README.md` aqui** — `README.md` é contexto de produto e já foi consumido pela `spec`.
 
+### 5.5. Ler principles + architecture (v10, se configurados)
+
+A v10 introduziu o "architecture advisor". Esta skill lê os arquivos quando configurados em `GOD/config.md` e usa pra gerar o bloco "Considerações arquiteturais" no plan.
+
+1. Ler `principles_path` do `config.md`. Se vazio ou arquivo não existe → pular.
+2. Ler `architecture_path` do `config.md`. Se vazio ou arquivo não existe → pular.
+3. Se ambos vazios/ausentes, **pular a geração do bloco silenciosamente** (retrocompat — quem não ativou não enxerga diferença).
+4. Se pelo menos um existe, carregar conteúdo em memória pro passo 7 (escrever plan.md).
+
+**Detecção de desvios** (heurística leve):
+- Comparar o plano que vai ser escrito com cada princípio/padrão.
+- Se uma decisão técnica do plan claramente **contradiz** um princípio: marcar como desvio (severidade `forte`).
+- Se uma decisão **se desvia** de um padrão preferido sem contradizer: marcar como desvio (severidade `leve`).
+- Se **alinhado**: nenhum desvio.
+
+**Modos de operação (flags):**
+- `--skip-architecture` → pula leitura inteira deste passo, mesmo se os arquivos existem. Útil pra plano rápido.
+- `--refactor` → modula o tom: desvios viram "oportunidade de refator alinhada com architecture.md".
+- `--preserve` → modula o tom: "preservar padrão atual mesmo divergindo de architecture.md (decisão consciente)". Cada desvio detectado pede justificativa explícita do usuário.
+- Sem flag → tom neutro: lista desvios e oferece (a) refatorar, (b) preservar com justificativa, (c) ajustar plan pra alinhar.
+
 ### 6. (Opcional) Q&A técnica com o usuário
 
 Apenas se houver **ambiguidade técnica** real (não de escopo) que afete a estrutura do plano:
@@ -163,6 +193,7 @@ Seções restantes do plano (comuns a ambos os modos):
 - Caminho: `{spec_path}`
 - REQs cobertos: REQ-001, REQ-002, ...
 - ACs amarrados aos passos: ver "Passos de implementação"
+- BRs aplicáveis (do frontmatter `applicable_rules` da spec, v10): {lista ou "nenhuma"}
 
 ## Arquivos afetados
 {arquivos que serão criados ou modificados, agrupados por projeto quando multi-project}
@@ -172,6 +203,26 @@ Seções restantes do plano (comuns a ambos os modos):
 
 ## Considerações técnicas
 {decisões arquiteturais, padrões a seguir, trade-offs, baseadas no knowledge + ARCHITECTURE.md/CLAUDE.md}
+
+## Considerações arquiteturais (v10 — apenas se principles/architecture configurados)
+
+{Se `--skip-architecture` foi passado, ou nenhum arquivo configurado, omitir esta seção inteira.}
+
+**Princípios consultados:** {referenciar `principles_path` ou "—"}
+**Padrões consultados:** {referenciar `architecture_path` ou "—"}
+
+**Alinhamento:**
+- ✅ Decisão X alinha com princípio "<resumo>"
+- ✅ Decisão Y segue padrão "<resumo>"
+
+**Desvios detectados:**
+- ⚠️ {forte} Decisão Z **contradiz** princípio "<resumo>" — exige justificativa
+- ⚠️ {leve} Decisão W **diverge** do padrão "<resumo>" mas não contradiz princípio
+- (ou "Sem desvios identificados.")
+
+**Resolução** (registrada após interação com usuário):
+- Z: {refatorar / preservar com justificativa / ajustar plan}
+- W: {refatorar / preservar com justificativa / ajustar plan}
 ```
 
 A seção "Branch de trabalho" é **obrigatória** e deve vir no topo. O `implement` lê diretamente do `status.md`, mas o registro explícito no `plan.md` serve como instrução literal pro humano que for ler o plano e deixa a decisão auditável.

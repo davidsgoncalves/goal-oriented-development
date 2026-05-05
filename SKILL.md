@@ -1,7 +1,7 @@
 ---
 name: god
 description: |
-  GOD (Goal Oriented Development) — Meta framework que orquestra o ciclo de vida completo de uma task. Na v9 (spec-first): spec → [publish-spec] → init → plan → implement → pack-up. Inclui variantes (init-tree para lote via árvore Jira) e ferramentas auxiliares (review, status, update-plan, update-spec, pause, resume, learn, code-like-me, upgrade) e integração com Jira/Figma. Use quando o usuário mencionar: "god", "nova task", "iniciar task", "init em lote", "iniciar epic", "iniciar várias tasks", "subtasks do jira", "spec da task", "criar spec", "atualizar spec", "spec mudou", "planejar task", "implementar task", "pack up", "pause", "resume", "pausar", "retomar", "learn", "conhecimento", "status das tasks", "upgrade god", "help", ou qualquer variação do ciclo de desenvolvimento orientado a objetivos.
+  GOD (Goal Oriented Development) — Meta framework que orquestra o ciclo de vida completo de uma task. Fluxo v9 (spec-first): spec → [publish-spec] → init → plan → implement → pack-up. v10 acrescenta architecture advisor opcional (principles + architecture) e domain rules opcionais (BRs com IDs derivados do domain frontmatter — agnóstico ao projeto). Inclui variantes (init-tree) e auxiliares (review, status, update-plan, update-spec, pause, resume, learn, code-like-me, upgrade) e integração com Jira/Figma. Use quando o usuário mencionar: "god", "nova task", "iniciar task", "init em lote", "iniciar epic", "iniciar várias tasks", "subtasks do jira", "spec da task", "criar spec", "atualizar spec", "spec mudou", "planejar task", "implementar task", "pack up", "pause", "resume", "pausar", "retomar", "learn", "conhecimento", "status das tasks", "upgrade god", "help", "regras de negócio", "BR aplicável", ou qualquer variação do ciclo de desenvolvimento orientado a objetivos.
 tools: Read, Glob, Grep, Bash, Edit, Write, Agent
 ---
 
@@ -58,7 +58,7 @@ Ferramentas auxiliares (learn, update-plan, review, status, pause, resume, code-
 | Skill | Localização | Quando usar |
 |-------|-------------|-------------|
 | `install` | `sub-skills/install/SKILL.md` | Primeira vez no projeto — configura GOD |
-| `spec` | `sub-skills/spec/SKILL.md` | **Entry point do fluxo (v9)** — produzir a spec canônica antes do init. Modos: interativo (default), `batch` (chamado por init-tree), `--review-feedback` (incorpora feedback antes do init), `--quick` (skip semântica). |
+| `spec` | `sub-skills/spec/SKILL.md` | **Entry point do fluxo (v9)** — produzir a spec canônica antes do init. Modos: interativo (default), `batch` (chamado por init-tree), `--review-feedback` (incorpora feedback antes do init), `--quick` (skip semântica). **v10.1:** roda análise heurística pré-Q&A (detecção de excessos/gaps via `heuristics.md`), self-validação inline, oferece feature split, aceita `--target` pra publicar direto. |
 | `init` | `sub-skills/init/SKILL.md` | Criar estrutura de execução pós-spec. Aceita `--type=trivial` pra mudanças cosméticas que pulam spec. |
 | `init-tree` | `sub-skills/init-tree/SKILL.md` | Começar em lote via árvore do Jira (Epic/Story + subtasks). Gera specs rascunho, **não** cria estrutura de execução por folha. |
 | `publish-spec` | `sub-skills/publish-spec/SKILL.md` | Publicar/republicar a spec em targets externos (Jira, Slack, stdout) — manual |
@@ -114,7 +114,7 @@ Antes de delegar para **qualquer** sub-skill exceto `install` e `upgrade`, verif
    - Se não existe e nem `GOD/` nem `GDD/` existem → sugerir `install`.
    - Se existe → ler o valor.
 
-2. **Valor de `GOD/VERSION` corresponde à versão atual do GOD (`v9`)?**
+2. **Valor de `GOD/VERSION` corresponde à versão atual do GOD (`v10`)?**
    - Sim → prosseguir com a skill solicitada.
    - Não → alertar o usuário e sugerir `upgrade`.
 
@@ -182,7 +182,7 @@ Quando o usuário pedir ajuda, disser "help", "o que posso fazer?", "como funcio
 O GOD orquestra o ciclo completo de uma task: da spec à entrega do PR.
 
 🚀 **Para começar, rode `install`** — isso vai configurar o projeto criando a pasta GOD/ com:
-  • VERSION — versão instalada (atualmente v9)
+  • VERSION — versão instalada (atualmente v10)
   • config.md — configuração local (specs_path: onde a spec da task vai morar)
   • knowledge.md — registro de tasks finalizadas (escrito apenas pelo `learn`)
   • patterns.md — convenções do projeto (branch, commit, PR, ações finais)
@@ -190,15 +190,34 @@ O GOD orquestra o ciclo completo de uma task: da spec à entrega do PR.
   • hooks.md — pontos de extensão por step (before/after de spec, init, plan, implement, pack-up)
   • tasks/ — pasta onde cada task terá plan e status (sem `description.md` em v9 — o input bruto vai pra spec)
 
-A v9 entrega **Spec-first + spec viva**:
+A v9 entregou **Spec-first + spec viva**:
   • Spec passa a ser o entry point do fluxo: `spec → [publish-spec] → init → plan → implement → pack-up`. Spec rejeitada não polui o repo com branch órfã.
-  • 3 perfis de task: `trivial` (cosmético, pula spec via `init --type=trivial`), `normal` (sem publish-spec automático), `critical` (sugere publish-spec antes do init). Heurística com confirmação detecta perfil.
-  • Skill nova `update-spec`: aplica mudança de escopo pós-init, bumpa `spec_version`, escreve em `<specs_path>/tasks/{cod}-changelog.md`. Próximo `implement` detecta drift via freshness check estendido e oferece reabrir passos relevantes (cruzando com `coverage.md`).
-  • `pack-up` carimba `spec_version_delivered` no PR + link do changelog se houve mudança durante a task.
-  • `init-tree` adapta-se: gera specs rascunho em batch (sem Q&A), você refina cada uma com `spec {cod}` antes de `init`.
-  • Tudo da v6/v7/v8 segue funcionando: spec extraída, review semântico, freshness check, publish-spec, rastreabilidade AC × validação.
+  • 3 perfis de task: `trivial` (cosmético, pula spec via `init --type=trivial`), `normal` (sem publish-spec automático), `critical` (sugere publish-spec antes do init).
+  • `update-spec`: muda escopo pós-init, bumpa `spec_version`, escreve em `<specs_path>/tasks/{cod}-changelog.md`. `implement` detecta drift via freshness check estendido.
+  • `pack-up` carimba `spec_version_delivered` no PR + link do changelog se houve mudança.
 
-Após instalar, preencha o `patterns.md` com as convenções do seu projeto. Os hooks são opcionais.
+A v10 entrega **Architecture advisor + Domain rules** (artefatos opcionais e configuráveis):
+  • `principles_path` (default `GOD/principles.md`) — princípios duradouros do projeto. `plan` lê e gera bloco "Considerações arquiteturais" sinalizando desvios sem bloquear.
+  • `architecture_path` (default `GOD/architecture.md`) — padrões "preferidos mas negociáveis". Lido junto com principles. Flags `--skip-architecture`, `--refactor`, `--preserve` no `plan`.
+  • `domains_path` (default `<specs_path>/domains/`) — pasta com arquivos `<dominio>.md`, BRs com IDs derivados do `domain:` do frontmatter (ex: `BR-PAYMENTS-007`). Agnóstico ao projeto.
+  • `spec` sugere `applicable_rules` no frontmatter da spec baseado em description (heurística + confirmação).
+  • `implement` sugere comentário `// rule: BR-X — descrição` no código onde a invariante é enforced.
+  • `pack-up` injeta tabela "BRs aplicáveis × anotadas" no PR (similar à matriz de cobertura da v8).
+  • Tudo opcional: quem não ativar (deixar paths vazios em `config.md`), fluxo segue silenciosamente.
+
+A v10.1 (patch transversal) unifica a skill `spec` com qualidades antes restritas à skill global `god-spec`:
+  • Análise heurística pré-Q&A: detecta excessos (HOW dentro do WHAT — pseudo-código, framework leak, schema técnico) e gaps (NFRs ausentes, ator não nomeado, cenários de erro). Tabelas em `sub-skills/spec/heuristics.md`.
+  • Q&A focada apenas em gaps detectados — não pergunta blocos completos quando o input já cobre.
+  • Seção `## Notas técnicas (input pro plan)` no template — preserva pseudo-código que veio no input sem contaminar REQs/ACs.
+  • Self-validação inline antes de delegar pro `review --spec` — corrige trivial sozinha (auto-numerar IDs, adicionar NFRs com placeholders, mover framework leak).
+  • Feature/subtask split inline — quando heurística detecta feature, oferece quebrar em spec pai + N subtasks (alternativa ao `init-tree` quando a árvore Jira ainda não existe).
+  • Flag `--target jira/slack/file/stdout/clipboard` — após escrever spec canônica, publica adicionalmente no destino (delega pra `publish-spec` internamente).
+  • Apresentação ASCII no relatório final.
+  • Resultado: **uma fonte única** pra escrever bem o WHAT — `god-spec` global continua existindo só como wrapper offline pra projetos sem GOD instalado.
+
+Tudo da v6/v7/v8/v9 segue funcionando: spec extraída, review semântico, freshness check, publish-spec, rastreabilidade AC × validação, spec viva.
+
+Após instalar, preencha o `patterns.md` com as convenções do seu projeto. Os hooks e os artefatos da v10 (principles/architecture/domains) são opcionais.
 
 Integrações opcionais (não obrigatórias):
   • Jira (Atlassian MCP) — busca automática de tasks
@@ -210,7 +229,7 @@ Integrações opcionais (não obrigatórias):
 ```
 ⚠️ **GOD detectado em versão anterior**
 
-A versão atual é v9 mas sua instalação está em {versão-detectada}.
+A versão atual é v10 mas sua instalação está em {versão-detectada}.
 
 Rode `upgrade` para migrar sua estrutura automaticamente — seus valores (patterns, tasks, knowledge) são preservados.
 ```

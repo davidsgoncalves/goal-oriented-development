@@ -181,11 +181,11 @@ Chamada pela skill `plan` após escrever o plano de implementação.
 
 ---
 
-### Modo 3: `--execution` — Plano vs Execução (+ cobertura de ACs em v8)
+### Modo 3: `--execution` — Plano vs Execução (+ cobertura de ACs v8 + BRs aplicáveis v10)
 
 Chamada pela skill `pack-up` antes de finalizar.
 
-**Objetivo:** Garantir que a implementação executou fielmente o que o plano definiu **e** que cada AC da spec está coberto por alguma forma de validação.
+**Objetivo:** Garantir que a implementação executou fielmente o que o plano definiu, que cada AC da spec está coberto, **e (v10)** que cada BR aplicável foi anotada em algum arquivo do diff.
 
 **Passos:**
 1. Ler `GOD/tasks/{cod-da-task}/plan.md` e `GOD/tasks/{cod-da-task}/status.md` (para obter `branch`, `branch_base` e `spec_path`)
@@ -193,6 +193,7 @@ Chamada pela skill `pack-up` antes de finalizar.
 3. Comparar o que foi planejado com o que foi efetivamente implementado
 4. **(v8)** Chamar `coverage --task {cod} --format json` e capturar a matriz de cobertura
 5. Cruzar passos do plano com cobertura de ACs
+6. **(v10)** Ler `applicable_rules` do frontmatter da spec. Se populado e `domains_path` configurado, parsear `// rule: BR-X` no diff e cruzar.
 
 **Critérios de revisão:**
 - Todos os passos do plano foram executados?
@@ -202,6 +203,8 @@ Chamada pela skill `pack-up` antes de finalizar.
 - A implementação introduziu efeitos colaterais não previstos?
 - **(v8)** Todos os ACs da spec têm cobertura registrada (teste ou manual)?
 - **(v8)** ACs órfãos (sem cobertura) são alertados — não bloqueiam, mas viram "Ajustes necessários"
+- **(v10)** Todas as BRs em `applicable_rules` aparecem anotadas em pelo menos um lugar do diff?
+- **(v10)** BRs declaradas sem anotação são alertadas — não bloqueiam, viram "Ajustes necessários"
 
 **Formato do relatório:**
 
@@ -224,18 +227,25 @@ Chamada pela skill `pack-up` antes de finalizar.
 
 **Resumo:** {N} ACs · {X} testes · {Y} manuais · {Z} órfãos
 
+### BRs aplicáveis (v10 — apenas se `applicable_rules` populado)
+- ✅ BR-PAYMENTS-001 — anotada em `src/vakinha.service.ts:42`
+- ✅ BR-PAYMENTS-007 — anotada em `src/meta.guard.ts:18`
+- ⚠️ BR-AUTH-003 — **declarada aplicável mas sem anotação no diff**
+
+**Resumo:** 3 BRs aplicáveis · 2 anotadas · 1 órfã
+
 ### Problemas encontrados
 - {efeitos colaterais, convenções quebradas, etc.}
 
 ### Veredito
-- ✅ **Aprovado** — execução alinhada e cobertura completa
-- ⚠️ **Ajustes necessários** — passos faltantes, alterações não planejadas, ou ACs órfãos
+- ✅ **Aprovado** — execução alinhada, cobertura completa, BRs anotadas
+- ⚠️ **Ajustes necessários** — passos faltantes, alterações não planejadas, ACs órfãos, ou BRs sem anotação
 - ❌ **Reprovado** — implementação precisa ser revisada (passos críticos faltando ou efeitos colaterais)
 ```
 
-**Regra de veredicto pra ACs órfãos:**
-- ACs órfãos sozinhos → **Ajustes necessários** (sugestão), nunca **Reprovado**.
-- Razão: pode ser legítimo (AC validado externamente, AC pendente de validação manual) — bloquear seria fricção desnecessária. O alerta visual no relatório é suficiente pra decisão consciente.
+**Regra de veredicto pra ACs/BRs órfãos:**
+- ACs ou BRs órfãos sozinhos → **Ajustes necessários** (sugestão), nunca **Reprovado**.
+- Razão: pode ser legítimo (AC validado externamente, BR já enforced em código existente fora do diff). Bloquear seria fricção desnecessária. O alerta visual no relatório é suficiente pra decisão consciente.
 
 ---
 

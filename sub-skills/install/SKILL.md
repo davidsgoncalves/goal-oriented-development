@@ -30,7 +30,7 @@ Quando o usuário invocar esta skill, execute os seguintes passos **na ordem**:
 
 Antes de qualquer coisa, verificar o estado das pastas no diretório raiz.
 
-- **Se `GOD/` existe e tem `GOD/VERSION` com conteúdo `v9`:** informar que o projeto já está instalado na versão atual e encerrar.
+- **Se `GOD/` existe e tem `GOD/VERSION` com conteúdo `v10`:** informar que o projeto já está instalado na versão atual e encerrar.
 - **Se `GOD/` existe mas `GOD/VERSION` não existe (ou aponta pra versão anterior):** informar que é uma instalação de versão antiga e sugerir rodar a skill `upgrade` em vez de reinstalar. Não sobrescrever arquivos existentes.
 - **Se `GOD/` não existe mas `GDD/` existe:** instalação legada da skill GDD detectada. Informar o usuário e sugerir rodar `upgrade` (ou `migrate`) para migrar automaticamente de GDD para GOD. Não instalar do zero — os dados do usuário (tasks, knowledge, patterns, hooks) serão preservados pela migração. Encerrar sem criar nada.
 - **Se nem `GOD/` nem `GDD/` existem:** prosseguir com a instalação.
@@ -50,7 +50,7 @@ GOD/
 └── tasks/
 ```
 
-- `VERSION` — arquivo com conteúdo `v9` (uma linha, sem espaços)
+- `VERSION` — arquivo com conteúdo `v10` (uma linha, sem espaços)
 - `config.md` — configuração local do GOD nesse projeto (ver passo 1.5 abaixo). Contém `specs_path` (onde a spec da task vai morar)
 - `knowledge.md` — criado com template padrão (ver seção abaixo)
 - `patterns.md` — criado com template padrão (ver seção abaixo)
@@ -184,16 +184,166 @@ exigem definição em `GOD/hooks.md` como `# publish-spec target: <nome>`.
 > - `jira` — toda execução de `publish-spec` sem flag publica no Jira
 > - `jira, slack` — publica nos dois ao mesmo tempo
 > - (vazio) — comportamento original: `stdout`
+
+## principles_path
+
+(v10) Caminho para o arquivo de princípios do projeto. Lido pelo `plan` para gerar
+o bloco "Considerações arquiteturais". Bullets curtos, projeto-específicos.
+
+(deixe vazio pra desativar — `plan` pula o bloco quando não há principles configurado)
+
+{principles_path}
+
+> Cenários:
+> - Default no GOD: `GOD/principles.md`
+> - No repo de specs: `<specs_path>/principles.md`
+> - Em outro lugar do código: `docs/principles.md`
+
+## architecture_path
+
+(v10) Caminho para o arquivo de arquitetura do projeto. Lido pelo `plan` junto com
+principles. Padrões "preferidos mas negociáveis" (3-5 padrões).
+
+(deixe vazio pra desativar)
+
+{architecture_path}
+
+## domains_path
+
+(v10) Caminho para a **pasta** de domínios. Cada arquivo `<dominio>.md` declara
+regras de negócio (BRs) com IDs derivados do `domain:` do frontmatter
+(ex: `domain: payments` → `BR-PAYMENTS-NNN`). Lido pelo `spec` (sugere
+applicable_rules), `implement` (sugere `// rule: BR-X`) e `pack-up` (tabela no PR).
+
+(deixe vazio pra desativar — fluxo passa silenciosamente sem mencionar BRs)
+
+{domains_path}
+
+> Cenários:
+> - Default no repo de specs: `<specs_path>/domains/`
+> - No GOD: `GOD/domains/` (raro — domains são canônicos do produto)
 ```
 
-Substituir `{specs_path}` pelo valor decidido. A seção `publish_spec_default_target` fica vazia por padrão (retrocompat). Se o usuário inicializou como repo git separado nesse passo, anotar isso no relatório final.
+Substituir `{specs_path}` pelo valor decidido. As seções `publish_spec_default_target`, `principles_path`, `architecture_path` e `domains_path` ficam vazias por padrão (retrocompat — quem não ativar não enxerga diferença). Se o usuário inicializou como repo git separado nesse passo, anotar isso no relatório final.
+
+### 1.6. Ativar artefatos opcionais (v10)
+
+A v10 introduziu 3 artefatos **opcionais** que ativam advisor de arquitetura e regras de negócio. Pra cada um, perguntar ao usuário se quer ativar agora. Default: pular (pode rodar `install` de novo ou editar `config.md` manualmente depois).
+
+**1.6.1. Princípios (`principles.md`)**
+
+```
+🏛️  Quer ativar princípios do projeto?
+
+`principles.md` contém bullets curtos com decisões duradouras do projeto
+(ex: "PII de doador anônimo nunca é exposta em log/métrica"). Lido pelo
+`plan` pra gerar o bloco "Considerações arquiteturais".
+
+Opções:
+  1. Sim, default em GOD/principles.md
+  2. Sim, em outro caminho (você digita)
+  3. Pular (pode ativar depois editando GOD/config.md)
+
+Escolha (1/2/3) ou Enter pra pular:
+```
+
+- **(1)** → criar arquivo vazio em `GOD/principles.md` com template neutro (abaixo). Popular `principles_path` no `config.md`.
+- **(2)** → perguntar caminho (relativo resolve a partir do GOD; absoluto OK). Criar arquivo vazio. Popular `config.md`.
+- **(3)** → deixar `principles_path:` vazio. Pular criação.
+
+Template do `principles.md` (neutro, sem hardcode de projeto):
+
+```markdown
+# Princípios
+
+> Decisões duradouras do projeto. Bullets curtos, projeto-específicos.
+> Lido pela skill `plan` para gerar o bloco "Considerações arquiteturais".
+> Sem isto, o `plan` pula esse bloco silenciosamente.
+
+<!-- Exemplos do que cabe aqui (apague depois de preencher os seus):
+- "<área> é evento contábil — nunca alterar valor pós-confirmação"
+- "FE não fala com banco direto — sempre via API"
+- "PII de <ator> nunca é exposta em log/métrica"
+-->
+```
+
+**1.6.2. Arquitetura (`architecture.md`)**
+
+Pergunta análoga, com texto:
+
+> 🏗️ Quer ativar arquitetura do projeto?
+>
+> `architecture.md` lista 3-5 padrões "preferidos mas negociáveis" (ex:
+> "controllers finos, lógica em service objects"). Lido junto com principles
+> pelo `plan`.
+
+Mesmo fluxo de opções (1/2/3). Template:
+
+```markdown
+# Arquitetura
+
+> Padrões "preferidos mas negociáveis" do projeto. Lido pela skill `plan`
+> junto com principles.
+
+## Camadas
+
+<!-- Ex: Controllers finos / lógica em service objects / repositories isolam DB
+     Apague e escreva os seus.
+-->
+
+## Convenções
+
+<!-- Ex: feature folders, não tipo-folders / DTOs com Zod / etc. -->
+```
+
+**1.6.3. Domínios (`domains/`)**
+
+Pergunta análoga:
+
+> 📜 Quer ativar regras de negócio (domains)?
+>
+> `domains/<dominio>.md` declara invariantes do domínio (BRs). IDs viram
+> `BR-<DOMINIO>-NNN` derivado do frontmatter de cada arquivo. Lido pelo
+> `spec` (sugere applicable_rules), `implement` (sugere `// rule:` no código)
+> e `pack-up` (tabela no PR).
+
+Opções:
+
+```
+  1. Sim, default em <specs_path>/domains/
+  2. Sim, em outro caminho (você digita)
+  3. Pular (pode ativar depois)
+```
+
+- **(1)** → criar pasta `<specs_path>/domains/` (vazia). Popular `domains_path`.
+- **(2)** → criar pasta no caminho fornecido. Popular `config.md`.
+- **(3)** → pular.
+
+**Não criar arquivo `domains/<exemplo>.md` automaticamente.** Domínios são responsabilidade do usuário (cada projeto tem seus). GOD apenas cria a pasta vazia. Quando o usuário criar o primeiro arquivo, deve seguir esta estrutura:
+
+```markdown
+---
+domain: <nome-em-lowercase>
+domain_version: 1
+---
+
+# Domain — <nome bonito>
+
+## BR-<DOMINIO_UPPER>-001: <nome curto>
+**INVARIANT** <sujeito> **SHALL** <comportamento invariante>.
+**Why:** <motivo — incidente, regulação, decisão consciente>.
+
+## BR-<DOMINIO_UPPER>-002: ...
+```
+
+> O sufixo `<DOMINIO_UPPER>` no ID é **derivado do `domain:` do frontmatter**, em uppercase. GOD nunca prescreve nome de domínio — você escolhe.
 
 ### 2. Preencher template do `VERSION`
 
 Conteúdo exato:
 
 ```
-v9
+v10
 ```
 
 ### 3. Preencher template do `knowledge.md`
@@ -364,13 +514,18 @@ Nenhuma dessas integrações é obrigatória, mas sem `gh` a experiência do `pa
 Montar a resposta listando o que está ok e o que está faltando:
 
 ```
-✅ Instalação v9 concluída! Estrutura GOD criada.
+✅ Instalação v10 concluída! Estrutura GOD criada.
 
 📐 Repo de specs configurado: {specs_path}
    • Pasta {criada / já existia}
    • Estrutura {tasks/ criada}
    • README {criado / já existia}
    • git: {repo separado inicializado / repo já existente / pasta dentro do projeto / pasta sem git}
+
+🏛️  Artefatos opcionais (v10):
+   • principles_path: {ativado em <path> / desativado}
+   • architecture_path: {ativado em <path> / desativado}
+   • domains_path: {ativado em <path> / desativado}
 
 🔌 Integrações:
   [✓/✗] Figma MCP — {status}
@@ -385,8 +540,9 @@ Montar a resposta listando o que está ok e o que está faltando:
 📋 Próximos passos:
   1. Preencha `GOD/patterns.md` com as convenções do seu projeto
   2. (Opcional) Preencha slots de `GOD/hooks.md` que você quer customizar
-  3. `GOD/learned-patterns.md` começa vazio — a skill `learn` vai preenchê-lo após a revisão de PR
-  4. Rode `spec` para iniciar sua primeira task (v9 spec-first). Fluxo: spec → [publish-spec] → init → plan → implement → pack-up. Pra mudança trivial (typo, copy), pule direto pra `init {cod} --type=trivial`.
+  3. (Opcional, v10) Se ativou principles/architecture/domains, preencha os arquivos com o conteúdo do seu projeto
+  4. `GOD/learned-patterns.md` começa vazio — a skill `learn` vai preenchê-lo após a revisão de PR
+  5. Rode `spec` para iniciar sua primeira task. Fluxo v9 spec-first: spec → [publish-spec] → init → plan → implement → pack-up. Pra mudança trivial (typo, copy), pule direto pra `init {cod} --type=trivial`.
 ```
 
 ---

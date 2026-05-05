@@ -26,6 +26,7 @@ A skill `spec` agora **antecede** o `init`. Não depende de `GOD/tasks/{cod}/` e
 - `--review-feedback` — modo de loop de validação. Re-executa a spec incorporando feedback externo (comentário do PM/UX no Jira/Slack). Incrementa `spec_version` no frontmatter. Limite de 2 ciclos automáticos consecutivos antes de exigir conversa síncrona com o stakeholder. Ver seção dedicada abaixo.
 - `--quick` — pula verificações semânticas profundas do `review --spec` (mantém só lint estrutural). Útil pra iteração rápida em tasks normais. **Em modo `--quick`, hook `after spec` é executado mas a sugestão de `publish-spec` ao final é silenciada.**
 - `--type=normal|critical` — força o perfil da task, dispensando heurística + confirmação. **Não há `--type=trivial` aqui** — task trivial não precisa de spec; o usuário deve rodar `init --type=trivial` diretamente.
+- `--target <destino>` *(v10.1)* — após escrever spec canônica em `<specs_path>/tasks/{cod}.md`, publicar **adicionalmente** no destino. Valores: `jira`, `slack`, `stdout`, `clipboard`, `file:<path>`, `notion`, ou custom definido em `hooks.md`. Reusa internamente a sub-skill `publish-spec` — não duplica lógica. Sem `--target`, comportamento atual (não publica automaticamente; `publish-spec` continua sendo skill separada pra invocação manual).
 
 ## Instruções
 
@@ -213,6 +214,30 @@ Se o Jira trouxe links do Figma, ou se o input bruto já continha links:
 
 Se não houver links do Figma, pular.
 
+### 4.5. Sugerir BRs aplicáveis (v10, se `domains_path` configurado)
+
+Se `GOD/config.md` tem `domains_path` populado e a pasta existe:
+
+1. **Listar arquivos `<dominio>.md`** no `domains_path`. Pra cada arquivo, ler frontmatter (`domain:`) e BRs declaradas (cabeçalhos `## BR-<DOMINIO_UPPER>-NNN`).
+2. **Heurística de relevância:** comparar input bruto + dados Jira + Figma com:
+   - Texto do título da BR (`## BR-X-001: Dono único`)
+   - Texto do `**Why:**` (motivo)
+   - Substantivos do domínio (ex: domain `payments` → palavras como "payment", "doação", "valor", "saque")
+3. **Listar BRs candidatas** ordenadas por relevância heurística. Sempre mostrar com confirmação:
+
+   > 📜 BRs potencialmente aplicáveis a esta task:
+   > - `BR-PAYMENTS-001` (Dono único) — alta relevância (task menciona "dono")
+   > - `BR-PAYMENTS-007` (Meta monotônica) — média relevância (task afeta valor)
+   > - `BR-AUTH-003` (Sessão expira em 24h) — baixa relevância (task toca user_id)
+   >
+   > Confirme quais aplicar (separado por vírgula, ou Enter pra aceitar as de alta relevância apenas):
+
+4. **Guardar** lista de BR-IDs confirmadas em memória pra ir pro frontmatter da spec (passo 8).
+
+Se `domains_path` não está configurado ou pasta vazia, **pular este passo silenciosamente** (sem mensagem de erro).
+
+> Heurística é deliberadamente conservadora — falso positivo treina dev a ignorar a sugestão. Quando em dúvida, **não sugerir**. A skill `audit-rules` (v10.5) vai cobrir BRs perdidas.
+
 ### 5. Coletar contexto do produto
 
 Ler arquivos canônicos do projeto que descrevem **produto**, não código:
@@ -222,39 +247,96 @@ Ler arquivos canônicos do projeto que descrevem **produto**, não código:
 
 A busca é case-insensitive. Não ler ARCHITECTURE.md aqui — isso é HOW, fica pro plan.
 
-### 6. Sessão de Q&A com o usuário — escopo apenas
+### 5.5. Análise heurística pré-Q&A (v10.1)
 
-Fazer perguntas agrupadas ao usuário focadas em **escopo** e **comportamento esperado**. **Proibido perguntar sobre implementação** (linguagem, framework, padrão arquitetural, biblioteca). Se uma dúvida técnica aparecer naturalmente, anotar pra repassar ao `plan`.
+Antes de perguntar qualquer coisa, varrer input bruto + dados Jira/Figma coletados procurando excessos (HOW dentro de WHAT) e gaps (WHAT que falta).
 
-Cobrir:
+1. **Carregar `sub-skills/spec/heuristics.md`** (arquivo separado com tabelas de detectores).
+2. **Aplicar detectores na ordem:**
+   - **Excessos** (seção 1 do heuristics.md): bloco de código, schema técnico detalhado, framework leak (lista de palavras-flag na seção 4), pseudo-código, decisão de banco/storage. Pra cada match, registrar `{tipo, trecho, ação sugerida}`.
+   - **Gaps** (seção 2): objetivo vago, ator não nomeado, não-objetivos ausentes, NFRs ausentes (perf/LGPD/observabilidade/auditoria), cenários de erro ausentes, comportamento não-testável. Pra cada gap, registrar `{tipo, motivo, pergunta sugerida}`.
+   - **Tamanho** (seção 3): contar sinais de feature. Threshold: 2+ sinais "forte" OU 3+ sinais "médio" → `tamanho: feature`. Senão, `tamanho: simples`.
+3. **Apresentar resumo da análise** (não interativo — só pra contexto da Q&A):
 
-**Objetivo:**
-- Qual problema essa task resolve?
-- Quem é o usuário/ator afetado?
+   ```
+   🔍 Análise heurística:
+     • Excessos detectados: {N} ({tipos})
+     • Gaps detectados: {N} ({tipos})
+     • Tamanho: {simples|feature}
+   ```
 
-**Comportamento esperado:**
-- O que deve acontecer no happy path?
-- Edge cases relevantes?
-- Cenários de erro?
+4. **Guardar lista estruturada** em memória — alimenta:
+   - Passo 6 (Q&A): pergunta apenas sobre gaps detectados.
+   - Passo 6.5 (feature split): se `tamanho: feature`, oferece quebrar em subtasks.
+   - Passo 8 (template): se há excessos pra preservar, popula `## Notas técnicas (input pro plan)`.
+   - Passo 8.5 (self-validação): valida correção dos excessos antes do review.
 
-**Escopo:**
-- O que está explicitamente FORA do escopo?
-- A task afeta apenas usuários novos / apenas existentes / ambos?
-- Há limites temporais ou condicionais?
+Se nenhum excesso/gap detectado e tamanho=simples, anunciar:
 
-**NFRs (não-funcionais):**
-- Performance importa nessa task? Algum limite explícito?
-- LGPD / privacidade? PII envolvida?
-- Acessibilidade?
-- Observabilidade — algum evento precisa ser logado?
+> ✅ Input bem estruturado. Q&A leve apenas pra confirmar entendimento.
+
+E seguir pro passo 6 com Q&A mínima (apenas confirmação).
+
+### 6. Sessão de Q&A com o usuário — focada em gaps detectados
+
+Fazer perguntas agrupadas focadas em **escopo** e **comportamento esperado**. **Proibido perguntar sobre implementação** (linguagem, framework, padrão arquitetural, biblioteca). Se dúvida técnica aparecer naturalmente, anotar pra repassar ao `plan`.
+
+**Princípio v10.1:** perguntar APENAS sobre os gaps detectados no passo 5.5. Se um bloco já está coberto pelo input, pular o bloco inteiro com mensagem explícita ("Objetivo claro do input — sem dúvidas").
+
+**Blocos possíveis** (cada um incluído na Q&A apenas se algum gap do tipo foi detectado):
+
+**Bloco "objetivo + ator + não-objetivos"** — incluir se há gap nesses:
+- Qual o problema único que esta task resolve? (apenas se objetivo vago)
+- Quem efetivamente faz/consome o resultado? Time específico? SLA implícito? (apenas se ator não nomeado)
+- Há algo no escopo aparente que você quer deixar claro que NÃO entra? (apenas se não-objetivos ausentes)
+
+**Bloco "comportamento e cenários"** — incluir se há gap:
+- (Listar dependências externas detectadas) — comportamento esperado se cada uma falhar?
+- Edge cases que ainda não estão claros?
+- O que reverte e o que persiste em caso de falha parcial?
+
+**Bloco "NFRs"** — incluir apenas as dimensões com gap:
+- Performance: limite explícito? (apenas se ausente e relevante)
+- LGPD/PII: dado pessoal envolvido? como tratar retenção? (apenas se PII detectada e sem menção)
+- Observabilidade: algo precisa ser logado/alertado? (apenas se ausente)
+- Acessibilidade: UI envolvida? requisitos a11y? (apenas se UI no escopo sem menção)
+- Auditabilidade: quem fez o quê precisa ficar registrado? (apenas se operação financeira/admin sem menção)
+
+**Bloco "decisões técnicas no input"** — incluir se há excessos detectados:
+
+> O input tem decisões técnicas embutidas: {lista de excessos}. Em SDD bem feito, isso vai pro `plan`, não pra spec. Quer:
+> - (a) Manter como está (fica prescritivo, mas time sênior decide)
+> - (b) Mover pra `## Notas técnicas (input pro plan)` na spec — preserva mas separa do escopo
+> - (c) Remover — `plan` resolve do zero
+
+Default sugerido: **(b)**. Preserva trabalho mas separa.
 
 Diretrizes:
-- **Não pergunte demais** — foque no que é ambíguo ou faltante.
-- **Não pergunte de menos** — garanta que entendeu objetivo, ACs e edge cases.
-- **Agrupe perguntas** — várias de uma vez, não uma por uma.
-- Se a task é trivial e o input já é claro, **anuncie que não há dúvidas** e siga.
+- **Aceite "não sei" ou "depois"** — gera placeholder explícito (`(a confirmar com infra)`) em vez de inventar.
+- **Agrupe perguntas** — todos os blocos do mesmo turno vão juntos, não 1 por turno.
+- Se nenhum gap detectado, anuncie "sem dúvidas" e siga.
 
 **Registrar todo o Q&A** — vai pra seção "Discovery" da spec.
+
+### 6.5. Feature split inline (v10.1, opcional)
+
+Se a heurística do passo 5.5 marcou `tamanho: feature` E `applicable_rules` não está em modo trivial, oferecer ao usuário:
+
+> 🧩 Heurística detectou que esta task tem características de feature ({sinais}). Sugiro quebrar:
+>
+> - (a) Gerar **spec pai** (escopo geral) + **N specs de subtasks** (escopo independente cada). Cada subtask vira arquivo próprio em `<specs_path>/tasks/{cod}-{N}.md` ou seguindo padrão de subtask do Jira.
+> - (b) Continuar como spec única — você sabe o que está fazendo.
+> - (c) Abortar e usar `init-tree` se a árvore Jira já existe (`init-tree {epic}` puxa do Jira em batch).
+
+Se (a):
+1. Inferir candidatos a subtasks pela análise de REQs detectados no input + dependências externas.
+2. Apresentar lista numerada e ordem (reflete dependência — primeira aterrissa antes das outras).
+3. Pedir confirmação/ajuste do usuário.
+4. Gerar spec pai + N specs de subtasks no passo 8 (template). Pai recebe REQs gerais que orquestram a feature; cada subtask recebe REQs específicos do que ela entrega.
+
+Se (b) ou (c): seguir fluxo normal (spec única).
+
+Se `tamanho: simples`: pular este passo silenciosamente.
 
 ### 7. Resolver título e composição final
 
@@ -274,6 +356,7 @@ Template canônico (v9):
 spec_version: 1
 task: {cod-da-task}
 profile: {normal|critical}
+applicable_rules: [{lista de BR-IDs confirmados no passo 4.5, ou [] se nenhum aplicável / domains_path desativado}]
 created_at: {timestamp-iso-8601-utc}
 updated_at: {timestamp-iso-8601-utc}
 ---
@@ -334,6 +417,11 @@ copiar o input dali. Esta seção substitui o `description.md` separado em tasks
 - Jira: {url ou "—"}
 - Figma: {url ou "—"}
 - Tasks semelhantes (knowledge): {códigos ou "nenhuma"}
+
+## Notas técnicas (input pro plan)
+
+{Apenas se o passo 5.5 detectou excessos que o usuário escolheu preservar (opção (b) do passo 6 — mover pra cá em vez de remover).
+Esta seção contém pseudo-código, schemas, decisões arquiteturais embutidas no input que ficam preservadas mas SEPARADAS do escopo. O `plan` consome como sugestão técnica, não como prescrição. Se vazia, omitir a seção inteira (template skipa quando passo 5.5 não detectou excessos a preservar).}
 ```
 
 **Regras de qualidade:**
@@ -342,6 +430,37 @@ copiar o input dali. Esta seção substitui o `description.md` separado em tasks
 - Não vazar implementação — se a spec menciona React, banco, framework, é violação.
 - EARS (`WHEN ... THEN ... SHALL ...`) é o formato preferido pros REQs. Se um REQ não cabe em EARS, prosa imperativa é aceitável.
 - A seção `## Input bruto` preserva o material original sem edição — não tente "limpar".
+
+### 8.5. Self-validação inline (v10.1)
+
+Antes de delegar pro `review --spec` (subagent isolado), rodar checklist mínimo da seção 5 de `heuristics.md` na própria spec recém-escrita. Corrige o trivial inline; sinaliza pro usuário o que não dá pra corrigir.
+
+Checks (ordem de execução):
+
+1. **Cada REQ tem ao menos 1 AC** — `bloqueia`. Se algum REQ está sem AC, perguntar ao usuário e adicionar (loop até cobrir).
+2. **ACs têm ID estável (`AC-NNN.N`)** — `corrige inline`. Numerar automaticamente os que estão sem ID.
+3. **Sem palavras-tabu sem métrica nos ACs** ("rápido", "fácil", "intuitivo", "escalável", "seguro" sem qualificação) — `bloqueia`. Reescrever ou perguntar métrica ao usuário.
+4. **Sem framework leak em REQs/ACs/Objetivo** — `corrige inline ou pergunta`. Aplicar lista de palavras-flag (seção 4 de heuristics.md). Se detectado, oferecer mover pra `## Notas técnicas (input pro plan)` ou reescrever.
+5. **Cada AC tem cenário associado** (happy/edge/erro) — `sugere`. Não bloqueia.
+6. **Seção NFRs presente** (mesmo com "não aplicável") — `corrige inline`. Adicionar com placeholders.
+7. **Não-objetivos declarados** — `sugere`. Se a seção está vazia, sugerir; não bloqueia.
+8. **Ator humano nomeado** — `sugere`. Se ausente, sugerir; não bloqueia.
+9. **`## Input bruto` preservado sem edição** — `bloqueia`. Restaurar do estado original se foi alterado.
+10. **Para feature** (passo 6.5 escolheu (a)): subtasks têm escopo independente — `sugere`.
+11. **Para feature**: ordem reflete dependência real — `sugere`. Pedir ao usuário pra confirmar.
+
+**Regra de ouro:** self-validação corrige trivial; `review --spec` (passo 9) faz peer-review semântica profunda em subagent isolado. As duas se complementam, não substituem.
+
+Reportar ao usuário só o que **bloqueou** ou foi **corrigido**:
+
+```
+🔧 Self-validação:
+  ✓ ACs IDs auto-numerados (3 corrigidos)
+  ✓ NFRs adicionados com placeholders (4 dimensões)
+  ⚠ AC-002.1 tem palavra-tabu "rápido" sem métrica — corrigir antes do review
+```
+
+Se algum check `bloqueia` falhou, **pausar pra correção** antes de seguir pro passo 9.
 
 ### 9. Rodar review
 
@@ -374,38 +493,101 @@ published_to: [<lista de destinos extraída do hook executado, ex: jira, slack>]
 
 Esses campos rastreiam ciência ativa de quem foi notificado. Se o hook for `skip-hook`, **não** definir esses campos (omitir do frontmatter).
 
-### 11. Reportar resultado
+### 10.5. Publicar via --target (v10.1, opcional)
 
-Texto adaptado ao perfil:
+Se a flag `--target <destino>` foi passada na invocação:
+
+1. **Delegar à sub-skill `publish-spec`** passando `{cod}` e o target. Reusa a infra existente (publica no Jira via MCP, posta no Slack, etc.) — não duplica lógica.
+2. **Capturar resultado** do `publish-spec`. Se sucesso, atualizar frontmatter com `last_published_at` e `published_to` (igual o hook `after spec` faria).
+3. Se falha (MCP indisponível, target inválido), avisar o usuário e prosseguir — spec canônica em `<specs_path>` continua sendo a fonte da verdade.
+
+Sem `--target`, pular este passo silenciosamente. Usuário pode rodar `publish-spec {cod}` manualmente depois.
+
+### 11. Reportar resultado (apresentação ASCII v10.1)
+
+Apresentar resultado em blocos ASCII (box-drawing fora de fences pra renderização nativa do terminal). Formato comum + sufixo adaptado ao perfil.
+
+**Cabeçalho** (sempre):
+
+```
+═══════════════════════════════════════════════════════════════════════════
+  Spec criada: {cod-da-task} — {título}
+  Perfil: {trivial|normal|critical}  ·  spec_version: {N}
+  REQs: {N}  ·  ACs: {M}  ·  NFRs declarados: {K}/4 dimensões
+═══════════════════════════════════════════════════════════════════════════
+```
+
+**Bloco "Onde mora":**
+
+```
+┌─ Onde mora ─────────────────────────────────────────────────────────────
+│
+│ 📐 Spec canônica: {tasks_dir}/{cod-da-task}.md
+│ 📜 Changelog: (nasce sob demanda — gerado pelo update-spec)
+│ 📡 Publicado em: {hook after spec executou em: jira / slack / —}
+│ {se --target foi usado:} 📤 Target adicional: {target}
+│
+└─────────────────────────────────────────────────────────────────────────
+```
+
+**Bloco "Análise heurística"** (v10.1, se passo 5.5 detectou algo):
+
+```
+┌─ Análise heurística ────────────────────────────────────────────────────
+│
+│ Excessos tratados: {N}  ({tipos: pseudo-código → notas técnicas, framework leak → reescrito})
+│ Gaps fechados via Q&A: {N}  ({tipos: ator nomeado, NFR LGPD declarada})
+│ Self-validação: {todas as correções inline aplicadas | bloqueada em X — corrigida com usuário}
+│ Tamanho: {simples | feature → quebrada em N subtasks}
+│
+└─────────────────────────────────────────────────────────────────────────
+```
+
+**Bloco "Próximo passo"** — adaptado ao perfil:
 
 **Para `profile: critical`:**
 
-> ✅ Spec criada para `{cod-da-task}` (perfil: critical)!
->
-> 📐 Arquivo: `<tasks_dir>/{cod-da-task}.md` (spec_version: 1)
-> 📊 {N requisitos, M critérios de aceitação registrados}
-> 📡 Hook after spec: {executado / skip}
->
-> 🚧 **Esta task é crítica. Não rode `init` ainda** — recomendo travar a spec antes:
->
-> 1. Rode `publish-spec {cod-da-task}` pra publicar em Jira/Slack/etc.
-> 2. Aguarde validação do stakeholder.
-> 3. Se vier feedback: `spec --review-feedback {cod-da-task}` pra incorporar.
-> 4. Quando aprovada: `init {cod-da-task}` (cria branch + estrutura de execução).
+```
+┌─ 🚧 Próximo passo (perfil critical) ────────────────────────────────────
+│
+│ Spec ainda não consumida — recomendo travar com stakeholder antes do init:
+│
+│   1. publish-spec {cod}        — publica em Jira/Slack
+│   2. (aguarde validação)
+│   3. spec --review-feedback {cod}  — se vier feedback, incorpora
+│   4. init {cod}                  — quando aprovada, cria estrutura
+│
+└─────────────────────────────────────────────────────────────────────────
+```
 
 **Para `profile: normal`:**
 
-> ✅ Spec criada para `{cod-da-task}` (perfil: normal)!
->
-> 📐 Arquivo: `<tasks_dir>/{cod-da-task}.md` (spec_version: 1)
-> 📊 {N requisitos, M critérios de aceitação registrados}
-> 📡 Hook after spec: {executado / skip}
->
-> 💡 Próximo passo: `init {cod-da-task}` — cria branch + estrutura de execução apontando pra esta spec.
->
-> 💬 Se chegar feedback antes do `init`, rode `spec --review-feedback {cod-da-task}` pra incorporar.
+```
+┌─ 💡 Próximo passo (perfil normal) ──────────────────────────────────────
+│
+│   init {cod}        — cria estrutura de execução apontando pra esta spec
+│
+│ 💬 Se feedback chegar antes do init: spec --review-feedback {cod}
+│
+└─────────────────────────────────────────────────────────────────────────
+```
 
-**Em modo `--quick`**, suprimir o bloco "Próximo passo" relativo a `publish-spec` mesmo se perfil for critical (pode ser rodado manual depois).
+**Em modo `--quick`** ou `--target` já passado: suprimir o bloco "publish-spec" mesmo em perfil critical (já foi publicado ou usuário pediu rápido).
+
+**Em modo feature split (passo 6.5 escolheu (a)):** adicionar bloco listando subtasks geradas:
+
+```
+┌─ Subtasks geradas (N) ──────────────────────────────────────────────────
+│
+│  1. {cod-1} — {título sub 1}     ·  {N REQs}  ·  {M ACs}
+│  2. {cod-2} — {título sub 2}     ·  {N REQs}  ·  {M ACs}
+│  3. ...
+│
+│ Cada subtask tem spec própria em <specs_path>/tasks/{cod-N}.md.
+│ Próximo passo: init {cod-1} (começa pela primeira da ordem de dependência).
+│
+└─────────────────────────────────────────────────────────────────────────
+```
 
 ---
 

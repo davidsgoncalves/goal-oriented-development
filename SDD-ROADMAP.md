@@ -2,17 +2,18 @@
 
 > Plano técnico de evolução do framework GOD, do estado atual até virar **SDD de verdade**, dentro do escopo da realidade onde ele é usado: time pequeno, releases diários, escopo que muda, arquitetura assistida (não imposta), spec é lei quando chega ao dev.
 
-> **Status:** Fases 1 (v6), 2 (v7), 3 (v8) e 4 (v9) entregues. Patch v8.1: peer-review via subagent isolado nos 3 modos do `review`. Patch v8.2: default target do publish-spec configurável.
+> **Status:** Fases 1 (v6), 2 (v7), 3 (v8), 4 (v9) e 5 (v10) entregues. Patches transversais: v8.1 (peer-review via subagent), v8.2 (default target do publish-spec configurável), v10.1 (spec absorve qualidades da god-spec — unificação).
 >
 > **Resumo das fases:**
 > - v6: spec extraída em path configurável.
 > - v7: hooks de propagação ativa, review semântico profundo, freshness check, `spec --review-feedback`, `publish-spec`.
 > - v8: rastreabilidade AC × validação via comentário `// covers: AC-X` + `coverage.md`; `coverage` skill nova; `pack-up` injeta tabela no PR; `review --execution` ganha eixo de cobertura.
-> - **v8.1 (patch retrocompatível):** os 3 modos do `review` (`--spec`, `--plan`, `--execution`) passam a executar via subagent (`Explore` pra spec/plan; `general-purpose` pra execution). Elimina viés de auto-validação. Sem migration.
+> - **v8.1 (patch retrocompatível):** os 3 modos do `review` (`--spec`, `--plan`, `--execution`) passam a executar via subagent. Elimina viés de auto-validação.
 > - **v8.2 (patch retrocompatível):** `publish-spec` aceita default em `GOD/config.md`.
 > - v9: spec-first (inverte ordem `init→spec` para `spec→init`) + spec viva (`update-spec` + changelog).
+> - v10: Architecture advisor (principles/architecture configuráveis) + Domain rules (`<dominio>.md` com BRs em IDs derivados do frontmatter, agnóstico ao projeto). `spec` sugere `applicable_rules`, `implement` sugere `// rule: BR-X`, `pack-up` injeta tabela de BRs no PR.
 >
-> Próxima: Fase 5 (v10) — Architecture advisor.
+> Próxima: v10.5 — skills `rules` (criação interativa de BR) e `audit-rules` (varredura de BRs órfãs / código apontando pra BR removida). Ou Fase 6 (v11) — Multi-autor (depende de mandato organizacional).
 
 ## Como ler este documento
 
@@ -37,7 +38,7 @@ Não execute fases fora de ordem. Cada uma assume os artefatos das anteriores co
 | 2 | v7 | Spec validável | **entregue** | Nenhuma |
 | 3 | v8 | AC rastreável | **entregue** | Nenhuma |
 | 4 | v9 | Spec-first + spec viva | **entregue** | Nenhuma |
-| 5 | v10 | Architecture advisor | a fazer | Baixa (preencher principles) |
+| 5 | v10 | Architecture advisor + Domain rules | **entregue** | Baixa (preencher principles + domains opcionais) |
 | 6 | v11 | Multi-autor | a fazer | Alta (mandato + equipe) |
 
 ---
@@ -324,43 +325,83 @@ Combinadas, fazem da spec o gate de entrada (precede commit) e de saída (versã
 
 ---
 
-## Fase 5 — Architecture advisor (v10)
+## Fase 5 — Architecture advisor + Domain rules (v10) — ENTREGUE
 
 ### Adaptação ao cenário
-Arquitetura é negociável, praticamente assistida. Então:
-- Arquitetura **NÃO** é gate. É advisor.
-- `plan` lê `architecture.md` e diz: "essa solução desvia do padrão atual em X. Você quer (a) refatorar, (b) preservar o desvio, (c) preservar o padrão?"
-- Decisão fica do dev. GOD nunca trava.
+Duas dimensões "preferidas mas negociáveis" entram juntas. **Nenhuma é gate** — GOD sinaliza, dev decide.
+
+1. **Arquitetura** é negociável, assistida. `plan` lê princípios e padrões, sinaliza desvios.
+2. **Regra de negócio** é invariante do domínio. Vive em `domains/<dominio>.md`. `spec` sugere quais BRs aplicáveis; `implement` ajuda a anotar `// rule: BR-X` onde a regra é enforced; `pack-up` injeta tabela no PR.
+
+Os 3 artefatos (`principles.md`, `architecture.md`, `domains/`) são **opcionais e configuráveis** via `GOD/config.md`. Quem ativar, ganha o advisor; quem não ativar, fluxo passa silenciosamente.
 
 ### O que entrega
-- `GOD/principles.md` — princípios mínimos do projeto (curtos, 5-10 bullets)
-- `GOD/architecture.md` — padrões arquiteturais "preferidos" mas negociáveis
-- `plan` consulta ambos e **sinaliza desvios sem bloquear**
-- Modos `--refactor` / `--preserve` no `plan` modulam tom da sugestão
+
+**Configuração:**
+- 3 chaves novas em `GOD/config.md`:
+  - `principles_path` (default: `GOD/principles.md`)
+  - `architecture_path` (default: `GOD/architecture.md`)
+  - `domains_path` (default: `<specs_path>/domains/`)
+- `install` pergunta se ativa cada um e cria templates vazios sob demanda.
+
+**Architecture advisor:**
+- `principles.md` — bullets curtos, projeto-específicos
+- `architecture.md` — 3-5 padrões "preferidos mas negociáveis"
+- `plan` lê ambos, gera bloco "Considerações arquiteturais" sinalizando desvios. Sempre roda quando os arquivos existem; flag `--skip-architecture` desliga
+- Flags `--refactor` / `--preserve` no `plan` modulam tom da sugestão
+
+**Domain rules:**
+- `domains/<dominio>.md` — frontmatter `domain: <nome>` + BRs numeradas (`BR-<DOMINIO_UPPER>-NNN`). IDs derivados do `domain` do frontmatter — agnóstico ao projeto
+- Cada BR tem **`INVARIANT` + `Why`** (motivo, incidente, regulação)
+- `spec` lê `domains/`, sugere `applicable_rules` no frontmatter da spec (heurística + confirmação)
+- `implement` ao escrever código sugere comentário `// rule: BR-<DOMINIO>-<N>` onde a invariante é enforced
+- `pack-up` injeta tabela "BRs aplicáveis × anotadas" no PR description (similar à matriz de cobertura da v8)
+- `review --execution` ganha eixo BR (BRs declaradas anotadas em algum lugar?)
+
+### Decisões tomadas durante a implementação
+
+1. **IDs derivados do `domain:` do frontmatter.** `domain: payments` → `BR-PAYMENTS-007`. Evita colisão entre domínios, fica auto-documentável. GOD nunca prescreve nome de domínio. Templates do install são neutros — sem hardcode de "vakinha", "payments" ou qualquer projeto.
+2. **Escopo enxuto pra v10.** Skills `rules` (criação interativa de BR) e `audit-rules` (varredura) ficam pra v10.5 ou patches transversais. v10 entregou só modificações no fluxo principal + templates + parser de `// rule:` no pack-up. Reduziu esforço de ~5 dias estimados pra ~3.
+3. **`plan` lê architecture/principles** quando os arquivos existem. Flag `--skip-architecture` desliga. Bloco "Considerações arquiteturais" aparece sempre que pelo menos um arquivo existe (mesmo que vazio: "sem desvios identificados"). Quando ambos paths estão desativados em `config.md`, bloco é omitido silenciosamente.
+4. **`pack-up` faz parsing inline de `// rule: BR-X`** sem mexer na skill `coverage` (que segue só pra ACs). Reusa a regex unificada da v8 (compatível com TS/JS/Ruby/Python/Go/Java/C#).
+5. **3 chaves novas em `config.md`:** `principles_path`, `architecture_path`, `domains_path`. Defaults razoáveis (`GOD/principles.md`, `GOD/architecture.md`, `<specs_path>/domains/`). Vazias = desativado.
+6. **Install pergunta opcionalmente** se ativa cada um dos 3 artefatos. Default = pular. Quem ativa, GOD cria template vazio neutro. Quem não ativa, fluxo segue silencioso (retrocompat com v9).
+7. **`spec` sugere `applicable_rules` com confirmação.** Heurística conservadora — quando em dúvida, não sugere. Pulado silenciosamente se `domains_path` está desativado.
+8. **`implement` orienta densidade baixa de anotações.** Diretriz explícita: anotar só onde a regra é *enforced*, não em cada toque. ~1 anotação por arquivo de domínio é o esperado. BR-órfã na task vai pra `coverage.md` como nota (sem anotação no código).
+9. **`update-spec` permite atualizar `applicable_rules`** quando muda escopo. Inclui adições/remoções no changelog.
+10. **`review --execution` cruza `applicable_rules` × diff** (igual cruza ACs × cobertura). BRs órfãs viram "Ajustes necessários", nunca "Reprovado".
 
 ### Modificações nas sub-skills
 
 | Skill | Mudança |
 |-------|---------|
-| `install` | Cria `principles.md` e `architecture.md` (templates vazios) |
-| `plan` | Ganha passo: ler principles + architecture, consultar contra a feature, gerar bloco "Considerações arquiteturais" com sugestões |
-| `plan` | Aceita flag `--refactor` ou `--preserve` |
-| `learned-patterns.md` | Continua escopo de **código**; principles/architecture cobrem **estrutura** |
+| `install` | VERSION → v10. Pergunta se ativa principles/architecture/domains. Adiciona 3 chaves no `config.md`. Cria templates vazios neutros (sem hardcode de projeto) |
+| `spec` | Lê `domains_path`, sugere `applicable_rules` baseado em description. Adiciona campo `applicable_rules` no frontmatter da spec |
+| `plan` | Lê `principles_path` + `architecture_path`. Gera bloco "Considerações arquiteturais" no plan.md. Lista `applicable_rules` da spec no topo. Flags `--skip-architecture`, `--refactor`, `--preserve` |
+| `implement` | Ao escrever código que enforça BR aplicável, sugere `// rule: BR-<DOMINIO>-<N> — descrição` (passo similar ao 5.5 da v8 pra ACs) |
+| `pack-up` | Parse de `// rule: BR-X` no diff. Tabela "BRs aplicáveis × anotadas" no PR. Alerta BRs sem anotação (não bloqueia) |
+| `update-spec` | Oferece atualizar `applicable_rules` quando muda escopo. Inclui no changelog |
+| `review --execution` | Eixo extra: BRs em `applicable_rules` anotadas em algum arquivo? Não bloqueia, vira "Ajustes necessários" |
 
 ### Pré-requisitos
-- **Técnicos:** Fase 1 (v6). Idealmente Fase 4 (v9) — porque mudança arquitetural é mudança de spec ampliada.
-- **Organizacionais:** baixo. Preencher `principles.md` com 5-10 princípios e `architecture.md` com 3-5 padrões. Trabalho de uma tarde.
+- **Técnicos:** Fase 4 (v9) entregue ✅.
+- **Organizacionais:** baixo. Quem usar precisa preencher os 3 arquivos do projeto (1 tarde de trabalho). Quem não usar, fluxo segue silencioso.
 
 ### Esforço de build
-~2 dias. Templates + integração no `plan`.
+~3 dias. Modificações no fluxo + templates + parser de `// rule:` no pack-up.
 
 ### Ganho
-- Decisões arquiteturais ficam **explícitas e auditáveis** mesmo sendo flexíveis
-- Onboarding de novo dev fica trivial (lê principles + architecture)
-- Quando refatoração entra em pauta, GOD ajuda a decidir o que preservar e o que descartar
+- **Decisões arquiteturais explícitas e auditáveis** mesmo sendo flexíveis
+- **Regra de negócio sai da cabeça das pessoas** — vira artefato versionado e citável em comentário inline (`// rule: BR-X`)
+- **Onboarding de novo dev** fica trivial (lê principles + architecture + domains)
+- **Refator com alavanca** — GOD ajuda a decidir o que preservar e o que descartar
+- **PR com rastreabilidade dupla** — AC × validação (v8) + BR × anotação (v10)
+- **Audit-rules futura** (v10.5) terá infra pronta — pra detectar BRs órfãs e código apontando pra BR removida
 
 ### Risco
-Baixo se principles for curto (10 bullets, não 10 páginas).
+- **Inflação de regras vira ruído.** Mitigação: limitar BRs a invariantes do domínio, não validações de campo. Heurística de sugestão deve ser conservadora — falso positivo treina dev a ignorar.
+- **Comentário `// rule:` em todo lugar polui código.** Mitigação: anotar só onde a regra é *enforced*, não em cada toque. Documentado no `implement` como diretriz.
+- **Manutenção de domains exige dono.** Sem dono, fica desatualizado. v10.5 entregará `audit-rules` que sinaliza divergências.
 
 ---
 
@@ -429,6 +470,7 @@ Capacidades aplicadas a múltiplas skills sem precisar de versão própria. Apar
 |-------|-----------|-------------|
 | **v8.1 — peer-review via subagent** | `review --spec/--plan/--execution` delegam pra subagent isolado (`Explore` ou `general-purpose`). Elimina viés de auto-validação | `sub-skills/review/SKILL.md` |
 | **v8.2 — default target do publish-spec configurável** | `publish-spec` aceita default em `GOD/config.md` seção `## publish_spec_default_target` (single ou comma-separated). Sem default → `stdout` (retrocompat). Tasks novas instaladas via v8.2 já trazem a seção vazia no template | `sub-skills/publish-spec/SKILL.md`, `sub-skills/install/SKILL.md` |
+| **v10.1 — spec absorve qualidades da god-spec (unificação)** | Skill `spec` ganha: análise heurística pré-Q&A (detecção de excessos/gaps), Q&A focada apenas em gaps detectados, seção `## Notas técnicas (input pro plan)` no template, self-validação inline antes do review, feature/subtask split inline (alternativa ao init-tree), flag `--target jira/slack/file/stdout/clipboard` (delega pra publish-spec), apresentação ASCII no relatório final. Heurísticas extraídas pra `sub-skills/spec/heuristics.md` (mantém SKILL.md gerenciável). Resolve duplicação com a skill global `god-spec` — agora há uma fonte única de "escrever bem WHAT". `god-spec` continua existindo apenas como wrapper offline pra projetos sem GOD instalado | `sub-skills/spec/SKILL.md`, `sub-skills/spec/heuristics.md` (novo) |
 
 ---
 

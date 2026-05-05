@@ -83,6 +83,7 @@ Perguntar ao usuário, agrupado:
 > 2. **Origem:** onde veio? (Jira comment, Slack, conversa, decisão própria, etc.)
 > 3. **Resumo da mudança:** em 1-2 linhas, o que muda no comportamento?
 > 4. **REQs/ACs afetados:** quais? (pode listar IDs específicos ou descrever; eu identifico os IDs no passo seguinte)
+> 5. **Afeta BRs aplicáveis?** (apenas se v10 ativa: spec tem `applicable_rules` e `domains_path` configurado) — a mudança adiciona ou remove BRs aplicáveis a esta task?
 
 Aguardar respostas. Se o usuário não souber identificar IDs afetados, prosseguir — o passo 5 cruza descrição com a spec pra identificar.
 
@@ -122,6 +123,7 @@ Editar `<spec_path>`:
 - Incrementar `spec_version` (ex: 1 → 2). **Não usar semver** — inteiro monotônico simples.
 - Atualizar `updated_at` no frontmatter.
 - Não tocar em `created_at`, `task`, `profile`.
+- **(v10)** Se há mudança em `applicable_rules`, atualizar a lista no frontmatter. Caso a v10 não esteja ativa (sem `domains_path`), pular.
 - Se a spec tinha `feedback_cycles`, **remover** o campo (esse ciclo é diferente, registrado no changelog separado).
 
 ### 7. Escrever entrada no changelog
@@ -154,6 +156,10 @@ Anexar ao final (ordem cronológica, mais novo embaixo OU em cima — escolher m
 
 **Removido:**
 - AC-002.1 (deprecated)
+
+**BRs aplicáveis (v10, se aplicável):**
+- Adicionado: BR-PAYMENTS-012
+- Removido: BR-AUTH-003 (não mais relevante após mudança de escopo)
 
 ### Impacto na execução
 

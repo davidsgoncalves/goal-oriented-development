@@ -289,6 +289,50 @@ Pra cada arquivo de teste criado ou modificado nesta task:
 
 Após anotar, a próxima execução de `coverage`, `pack-up` ou `review --execution` vai reconhecer essas amarras.
 
+### 5.6. Anotação BR↔código (v10, se `applicable_rules` populado)
+
+Se a spec tem `applicable_rules` no frontmatter (v10) **e** `domains_path` está configurado em `GOD/config.md`:
+
+1. Carregar BRs aplicáveis (lista de IDs do frontmatter).
+2. Pra cada BR, ler o conteúdo da regra no arquivo `<domains_path>/<dominio>.md` (extrair pelo `## BR-<DOMINIO_UPPER>-NNN`).
+3. Identificar **onde no código a invariante é mantida (enforced)** — não onde o conceito apenas trafega:
+
+   ```ts
+   // ❌ Não anotar — apenas lê
+   const owner = vakinha.owner_id;
+
+   // ✅ Anotar — aqui é onde a invariante é mantida
+   // rule: BR-PAYMENTS-001 — dono único
+   if (vakinha.owners.length > 1) throw new Error('multiple owners');
+   ```
+
+4. Sugerir comentário **acima da linha de enforcement** no formato:
+
+   ```ts
+   // rule: BR-<DOMINIO>-<N> — <descrição curta>
+   ```
+
+   Mesma sintaxe pra Ruby (`# rule:`), Python (`# rule:`), Go/Java/C# (`// rule:`).
+
+5. **Heurística de onde é "enforced":** condição que pode falhar (`if ... throw`), filter/where que aplica a regra (`donors.filter(d => !d.anonymous)`), validação explícita, transação/lock que mantém invariante.
+
+6. **Diretrizes anti-poluição:**
+   - Anotar **só onde a regra é mantida**, não em cada toque do conceito.
+   - Densidade esperada: ~1 anotação por arquivo de domínio (model, service core), zero em controllers/views/mappers.
+   - Se uma BR aparece anotada >5 vezes, sugerir centralização ("considere extrair pra um helper").
+
+7. **BR sem ponto claro de enforcement nesta task:** se você não consegue identificar o lugar onde a invariante é mantida (ex: BR-PAYMENTS-007 "meta monotônica" mas a task atual só lê meta), **não anotar nada** e adicionar nota em `coverage.md`:
+
+   ```markdown
+   ## BRs aplicáveis sem anotação
+
+   - BR-PAYMENTS-007: task atual não enforça (apenas lê meta). Anotação ficará em task futura que mexer em `update_meta`.
+   ```
+
+8. **Não inventar BR.** Se você sente que falta uma BR pra explicar uma decisão de código, **não crie a BR aqui** — a criação de BR é responsabilidade do usuário (skill `rules` virá na v10.5; por enquanto, edição manual de `<domains_path>/<dominio>.md`). Anote no changelog "BR candidata: <descrição>" e siga.
+
+Após anotar, `pack-up` vai parsear os comentários `// rule:` no diff e gerar tabela "BRs aplicáveis × anotadas" no PR.
+
 ### 6. Verificação pós-implementação
 
 Após implementar:
